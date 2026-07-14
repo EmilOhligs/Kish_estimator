@@ -112,6 +112,10 @@ def plot_cv(fam_data, single_data, fname="cv_vs_neff.png"):
     for name, d in fam_data.items():
         ax.plot(d[:, 0], d[:, 2], "o-", ms=4, alpha=0.85, label=name)
     for name, p in single_data.items():
+        if p[0] <= 0:      # CV=0 (Konstant) -> auf Log-Achse nicht darstellbar
+            ax.axhline(p[2], color="green", ls=":", lw=1.5,
+                       label=f"{name} (CV=0 → N_eff=n)")
+            continue
         ax.plot(p[0], p[2], "s", ms=9, alpha=0.9, label=name)
 
     ax.set_xscale("log")
@@ -139,6 +143,10 @@ def plot_var(fam_data, single_data, fname="var_vs_neff.png"):
     for name, d in fam_data.items():
         ax.plot(d[:, 1], d[:, 2], "o-", ms=4, alpha=0.85, label=name)
     for name, p in single_data.items():
+        if p[1] <= 0:      # Var=0 (Konstant) -> auf Log-Achse nicht darstellbar
+            ax.axhline(p[2], color="green", ls=":", lw=1.5,
+                       label=f"{name} (Var=0 → N_eff=n)")
+            continue
         ax.plot(p[1], p[2], "s", ms=9, alpha=0.9, label=name)
 
     ax.set_xscale("log")
@@ -153,8 +161,59 @@ def plot_var(fam_data, single_data, fname="var_vs_neff.png"):
 
 
 # ---------------------------------------------------------------------------
+# Plot 3: CV vs. N_eff — je Verteilung EINZELN (ein Subplot pro Familie),
+#         alle Verteilungen mit festem CV gesammelt in EINEM Subplot.
+# ---------------------------------------------------------------------------
+def plot_cv_grid(fam_data, single_data, fname="cv_vs_neff_einzeln.png"):
+    cv_grid = np.linspace(0, max(6, np.sqrt(N)), 400)
+    theory  = N / (1 + cv_grid**2)
+
+    panels   = list(fam_data.items())        # eine Familie = ein Subplot
+    n_panels = len(panels) + 1               # + 1 Sammel-Subplot fuer feste CV
+    ncol = 3
+    nrow = int(np.ceil(n_panels / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(6 * ncol, 4.5 * nrow))
+    axes = np.atleast_1d(axes).ravel()
+
+    # je Familie ein Subplot (mit theoretischer Kurve als Referenz)
+    for ax, (name, d) in zip(axes, panels):
+        ax.plot(cv_grid, theory, "k--", lw=1.5, label=r"$n/(1+CV^2)$")
+        ax.plot(d[:, 0], d[:, 2], "o-", ms=5, color="C0", label=name)
+        ax.set_xscale("log")
+        ax.set_xlabel("CV(w)")
+        ax.set_ylabel(r"$N_\mathrm{eff}$")
+        ax.set_title(name)
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3, which="both")
+
+    # letzter genutzter Subplot: alle Verteilungen mit festem CV gemeinsam
+    ax = axes[len(panels)]
+    ax.plot(cv_grid, theory, "k--", lw=1.5, label=r"$n/(1+CV^2)$")
+    for sname, p in single_data.items():
+        if p[0] <= 0:      # Konstante (CV=0) -> Horizontale
+            ax.axhline(p[2], color="green", ls=":", lw=1.5, label=f"{sname} (CV=0)")
+            continue
+        ax.plot(p[0], p[2], "s", ms=9, label=sname)
+    ax.set_xscale("log")
+    ax.set_xlabel("CV(w)")
+    ax.set_ylabel(r"$N_\mathrm{eff}$")
+    ax.set_title("Verteilungen mit festem CV")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.3, which="both")
+
+    for ax in axes[n_panels:]:               # ungenutzte Achsen ausblenden
+        ax.axis("off")
+
+    fig.suptitle(f"CV vs. N_eff — je Verteilung einzeln (n={N})", fontsize=13)
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.savefig(fname, dpi=130)
+    print(f"gespeichert: {fname}")
+
+
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     fam_data, single_data = collect()
-    plot_cv(fam_data, single_data)
-    plot_var(fam_data, single_data)
-    print("Fertig. Zwei PNGs im aktuellen Arbeitsverzeichnis.")
+    plot_cv(fam_data, single_data)          # kombinierter CV-Plot (wie bisher)
+    plot_cv_grid(fam_data, single_data)     # NEU: ein Subplot pro Verteilung
+    plot_var(fam_data, single_data)         # Var-Plot (wie bisher)
+    print("Fertig. Drei PNGs im aktuellen Arbeitsverzeichnis.")
