@@ -1,0 +1,9 @@
+numpy
+scipy
+matplotlib
+pandas
+ase
+pytest
+pyyaml
+torch
+mace-torch

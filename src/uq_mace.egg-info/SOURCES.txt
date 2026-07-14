@@ -1,10 +1,8 @@
-LICENSE
-README.md
 pyproject.toml
 src/uq_mace/__init__.py
-src/uq_mace/calibration.py
 src/uq_mace/data.py
 src/uq_mace/ensemble.py
+src/uq_mace/evaluation.py
 src/uq_mace/reweighting.py
 src/uq_mace.egg-info/PKG-INFO
 src/uq_mace.egg-info/SOURCES.txt
@@ -16,4 +14,6 @@ src/uq_mace/uq_methods/evidential.py
 src/uq_mace/uq_methods/mc_dropout.py
 tests/test_calibration.py
 tests/test_data_smoke.py
+tests/test_evaluation.py
 tests/test_reweighting.py
+tests/test_reweighting_diagnostics.py

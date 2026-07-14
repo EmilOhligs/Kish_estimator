@@ -4,5 +4,3 @@ Version: 0.1.0
 Summary: Uncertainty quantification for MACE interatomic potentials, applied to water
 Author: Emil Ohligs
 Requires-Python: >=3.10
-License-File: LICENSE
-Dynamic: license-file
