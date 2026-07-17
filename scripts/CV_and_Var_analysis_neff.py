@@ -211,9 +211,39 @@ def plot_cv_grid(fam_data, single_data, fname="cv_vs_neff_einzeln.png"):
 
 
 # ---------------------------------------------------------------------------
+# Plot 4: CV vs. N_eff mit LINEARER x-Achse
+#         -> zeigt die eigentliche Funktionsform 1/(1+CV^2) (Hexe von Agnesi).
+#         Ausschnitt bis xmax, weil grosse CV (Pareto/Lognormal) sonst alles
+#         nach rechts ziehen. Konstante (CV=0) ist hier als Punkt darstellbar.
+# ---------------------------------------------------------------------------
+def plot_cv_linear(fam_data, single_data, fname="cv_vs_neff_linear.png", xmax=6.0):
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+
+    cv_grid = np.linspace(0, xmax, 400)
+    ax.plot(cv_grid, N / (1 + cv_grid**2), "k--", lw=2,
+            label=r"$N_\mathrm{eff}=n/(1+CV^2)$ (exakt)")
+
+    for name, d in fam_data.items():
+        ax.plot(d[:, 0], d[:, 2], "o-", ms=4, alpha=0.85, label=name)
+    for name, p in single_data.items():
+        ax.plot(p[0], p[2], "s", ms=9, alpha=0.9, label=name)  # inkl. Konstante bei CV=0
+
+    ax.set_xlim(0, xmax)          # LINEAR (kein set_xscale) + Ausschnitt
+    ax.set_xlabel("CV(w)  (lineare Achse)")
+    ax.set_ylabel(r"$N_\mathrm{eff}$")
+    ax.set_title(f"CV vs. N_eff  (n={N}, linear) — Form $1/(1+CV^2)$ sichtbar")
+    ax.legend(fontsize=8, ncol=2)
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(fname, dpi=130)
+    print(f"gespeichert: {fname}")
+
+
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     fam_data, single_data = collect()
-    plot_cv(fam_data, single_data)          # kombinierter CV-Plot (wie bisher)
-    plot_cv_grid(fam_data, single_data)     # NEU: ein Subplot pro Verteilung
-    plot_var(fam_data, single_data)         # Var-Plot (wie bisher)
-    print("Fertig. Drei PNGs im aktuellen Arbeitsverzeichnis.")
+    plot_cv(fam_data, single_data)          # kombinierter CV-Plot (log)
+    plot_cv_grid(fam_data, single_data)     # ein Subplot pro Verteilung (log)
+    plot_cv_linear(fam_data, single_data)   # NEU: CV linear -> 1/(1+CV^2)-Form
+    plot_var(fam_data, single_data)         # Var-Plot (log)
+    print("Fertig. Vier PNGs im aktuellen Arbeitsverzeichnis.")
