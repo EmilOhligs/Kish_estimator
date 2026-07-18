@@ -49,6 +49,52 @@ def _to_object_array(seq) -> np.ndarray:
     return arr
 
 
+K_B = 8.617333262e-5  # eV/K
+
+
+def load_weights(path: str | Path, temperature: float = 300.0) -> np.ndarray:
+    """Gewichte w_i aus einer vorhandenen Datei beschaffen - ohne MACE-Neulauf.
+
+    Erkennt automatisch:
+      * fertige Gewichte : .npz-Key 'w'/'weights', oder .npy/.txt/.csv-Array
+      * Energie-Cache    : .npz mit 'e_dft' und ('e_mace' oder 'energies')
+                           -> w = exp(-beta*(e_dft - e_mace)) wird hier berechnet
+                              (beta = 1/(k_B T)). Deckt sowohl den aktuellen
+                              predictions_*.npz als auch aeltere mace_energies_*.npz ab.
+    """
+    from .reweighting import reweighting_weights
+
+    p = Path(path)
+    if p.suffix == ".npz":
+        d = np.load(p, allow_pickle=True)
+        if any(k in d.files for k in ("w", "weights")):
+            key = "w" if "w" in d.files else "weights"
+            w = d[key]
+            print(f"[load ] {np.asarray(w).size} fertige Gewichte aus {p.name}")
+        elif "e_dft" in d.files:
+            e_dft = np.asarray(d["e_dft"], dtype=float)
+            if "e_mace" in d.files:
+                e_mace = np.asarray(d["e_mace"], dtype=float)
+            elif "energies" in d.files:
+                e_mace = np.asarray(d["energies"], dtype=float).mean(axis=0)
+            else:
+                raise KeyError(f"{p.name}: 'e_dft' ohne 'e_mace'/'energies'")
+            beta = 1.0 / (K_B * temperature)
+            w = reweighting_weights(e_dft, e_mace, beta)
+            print(f"[calc ] w_i aus e_dft/e_mace in {p.name} berechnet "
+                  f"(T={temperature:.0f} K, beta={beta:.2f} eV^-1), n={w.size}")
+        else:
+            w = d[d.files[0]]
+            print(f"[load ] {np.asarray(w).size} Werte aus {p.name} (Key '{d.files[0]}')")
+    elif p.suffix == ".npy":
+        w = np.load(p)
+        print(f"[load ] {np.asarray(w).size} Gewichte aus {p.name}")
+    else:  # .txt / .csv / .dat
+        w = np.loadtxt(p, delimiter="," if p.suffix == ".csv" else None)
+        print(f"[load ] {np.asarray(w).size} Gewichte aus {p.name}")
+    return np.asarray(w, dtype=float).ravel()
+
+
 def get_predictions(
     ensemble: str = "ensemble_L2c",
     testset: str = "big",

@@ -196,6 +196,14 @@ def main():
     )
     analyse_and_plot(e_dft, e_mace, beta, args.temperature, rmse, args.ensemble, out_png)
 
+    # Berechnete Gewichte + dE ablegen -> direkt fuer neff_running_estimate.py
+    # (--weights) nutzbar, ohne irgendetwas neu zu rechnen.
+    w = reweighting_weights(e_dft, e_mace, beta)
+    w_npz = out_png.parent / f"weights_{args.ensemble}_test{args.testset}_{args.temperature:.0f}K.npz"
+    np.savez(w_npz, w=w, dE=e_dft - e_mace, e_dft=e_dft, e_mace=e_mace,
+             beta=beta, temperature=args.temperature)
+    print(f"[save ] Gewichte -> {w_npz.name}")
+
 
 if __name__ == "__main__":
     main()

@@ -124,6 +124,47 @@ def sample_overlap(weights) -> float:
     return float(np.minimum(p, 1.0 / w.size).sum())
 
 
+def running_neff_cv(weights) -> dict:
+    """Iterative N_eff-Schaetzung ueber den CV-Zusammenhang.
+
+    Fuegt die Gewichte w_1, w_2, ... nacheinander hinzu und schaetzt nach jedem
+    neuen w_k den effektiven Stichprobenumfang allein aus der bis dahin
+    beobachteten Streuung:
+
+        CV_k    = std_pop(w_1..w_k) / mean(w_1..w_k)
+        N_eff_k = k / (1 + CV_k^2)
+
+    Diese Schaetzung ist mit der direkten Kish-Formel auf denselben k Gewichten
+    IDENTISCH (algebraisch: k/(1+CV^2) = (sum w)^2 / sum w^2), weil
+    1 + CV^2 = <w^2>/<w>^2. Der Nutzen der iterativen Sicht ist die KONVERGENZ:
+    man sieht, ab welchem Stichprobenumfang sich N_eff/k stabilisiert -> ob das
+    Reweighting "klappen" wird (KI-Briefing / notebooks/Neff_first_look).
+
+    Bei schweren Raendern springt die laufende Schaetzung noch spaet (ein einzelnes
+    grosses w_k zieht CV hoch) -> genau das Signal fuer Unzuverlaessigkeit.
+
+    weights : 1D-Array positiver Gewichte in der Reihenfolge, in der sie anfallen.
+    Rueckgabe: dict mit
+        k          : (n,) Stichprobenumfang 1..n
+        cv         : (n,) laufender Variationskoeffizient (ddof=0)
+        neff       : (n,) laufende N_eff-Schaetzung aus CV
+        neff_ratio : (n,) neff / k
+    """
+    import numpy as np
+
+    w = np.asarray(weights, dtype=float)
+    n = w.size
+    k = np.arange(1, n + 1)
+    s1 = np.cumsum(w)               # sum_{i<=k} w_i
+    s2 = np.cumsum(w * w)           # sum_{i<=k} w_i^2
+    mean = s1 / k
+    var = np.maximum(s2 / k - mean ** 2, 0.0)   # Populations-Varianz (ddof=0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cv = np.where(mean > 0, np.sqrt(var) / mean, np.inf)
+    neff = k / (1.0 + cv ** 2)
+    return dict(k=k, cv=cv, neff=neff, neff_ratio=neff / k)
+
+
 def neff_leave_one_out(energies, beta: float) -> float:
     """Task 2 (H8): DFT-freie N_eff-Prognose aus der Inter-Member-Streuung.
 
