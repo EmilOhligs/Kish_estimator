@@ -12,25 +12,21 @@ Reproduces what Tobi asked for (email, 2026-07-08):
 """
 import numpy as np
 
-from uq_mace.data import TEST_SET_SMALL, load_trajectory
 from uq_mace.ensemble import MODELS_DIR
 from uq_mace.evaluation import (
     energy_rmse_per_atom,
-    evaluate_ensemble_members,
     force_rmse,
     local_force_sigma_and_error,
-    reference_energies_forces,
     sigma_error_correlation,
 )
+from uq_mace.predictions import get_predictions
 
 ENSEMBLES = ["ensemble_L0", "ensemble_L0c", "ensemble_L2c"]
+TESTSET = "small"  # water_test_small.xyz
 
 
 def main():
-    frames = load_trajectory(TEST_SET_SMALL)
-    e_ref, f_ref, n_atoms = reference_energies_forces(frames)
-
-    print(f"Evaluating on {TEST_SET_SMALL.name} ({len(frames)} frames)\n")
+    print(f"Evaluating on test{TESTSET} set\n")
 
     for name in ENSEMBLES:
         model_dir = MODELS_DIR / name
@@ -38,7 +34,11 @@ def main():
             print(f"{name}: skipped (not found)")
             continue
 
-        result = evaluate_ensemble_members(model_dir, frames)
+        # Gemeinsamer Cache: MACE laeuft nur einmal je (Ensemble, Testsatz);
+        # plot_weight_distribution.py liest dieselben Zahlen.
+        pred = get_predictions(name, TESTSET)
+        result = {"energies": pred["energies"], "forces": pred["forces"]}
+        e_ref, f_ref, n_atoms = pred["e_dft"], pred["f_ref"], pred["n_atoms"]
         energies = result["energies"]  # (n_members, n_frames)
 
         e_mean = energies.mean(axis=0)
