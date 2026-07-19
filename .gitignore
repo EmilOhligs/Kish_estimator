@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# Nicht oeffentlich: Rohdaten, Modell-Checkpoints, persoenliche Notizen
+# ---------------------------------------------------------------------------
+# DFT-Trainings-/Testdaten (von Tobias Hilpert, RPBE-D3) - nicht weitergeben
+data/
+
+# Trainierte MACE-Checkpoints (~38 MB, gehoeren nicht in git)
+models/
+
+# Persoenliche Arbeitsnotizen
+notebooks/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Editor / OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# Rechenergebnisse
+# ---------------------------------------------------------------------------
+# Plots in results/ bleiben absichtlich getrackt (klein, dokumentieren Befunde).
+# Die abgeleiteten Energie-/Vorhersage-Caches dagegen nicht: sie sind gross,
+# jederzeit reproduzierbar und enthalten DFT-Energien aus data/.
+results/predictions_*.npz
+results/mace_energies_*.npz
+results/weights_*.npz
+
+# Trainings-Logs
+logs/
