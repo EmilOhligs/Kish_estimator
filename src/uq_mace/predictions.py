@@ -52,6 +52,27 @@ def _to_object_array(seq) -> np.ndarray:
 K_B = 8.617333262e-5  # eV/K
 
 
+def load_energies(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """(e_dft, e_mace) aus einem Energie-Cache lesen - ohne MACE-Neulauf.
+
+    Akzeptiert sowohl den aktuellen predictions_*.npz (Keys 'e_dft','energies')
+    als auch aeltere mace_energies_*.npz (zusaetzlich 'e_mace'). e_mace ist das
+    Ensemble-Mittel.
+    """
+    p = Path(path)
+    d = np.load(p, allow_pickle=True)
+    if "e_dft" not in d.files:
+        raise KeyError(f"{p.name}: kein 'e_dft' enthalten (Keys: {d.files})")
+    e_dft = np.asarray(d["e_dft"], dtype=float)
+    if "e_mace" in d.files:
+        e_mace = np.asarray(d["e_mace"], dtype=float)
+    elif "energies" in d.files:
+        e_mace = np.asarray(d["energies"], dtype=float).mean(axis=0)
+    else:
+        raise KeyError(f"{p.name}: 'e_dft' ohne 'e_mace'/'energies'")
+    return e_dft, e_mace
+
+
 def load_weights(path: str | Path, temperature: float = 300.0) -> np.ndarray:
     """Gewichte w_i aus einer vorhandenen Datei beschaffen - ohne MACE-Neulauf.
 
@@ -72,13 +93,7 @@ def load_weights(path: str | Path, temperature: float = 300.0) -> np.ndarray:
             w = d[key]
             print(f"[load ] {np.asarray(w).size} fertige Gewichte aus {p.name}")
         elif "e_dft" in d.files:
-            e_dft = np.asarray(d["e_dft"], dtype=float)
-            if "e_mace" in d.files:
-                e_mace = np.asarray(d["e_mace"], dtype=float)
-            elif "energies" in d.files:
-                e_mace = np.asarray(d["energies"], dtype=float).mean(axis=0)
-            else:
-                raise KeyError(f"{p.name}: 'e_dft' ohne 'e_mace'/'energies'")
+            e_dft, e_mace = load_energies(p)
             beta = 1.0 / (K_B * temperature)
             w = reweighting_weights(e_dft, e_mace, beta)
             print(f"[calc ] w_i aus e_dft/e_mace in {p.name} berechnet "
