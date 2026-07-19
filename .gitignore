@@ -10,6 +10,9 @@ models/
 # Persoenliche Arbeitsnotizen
 notebooks/
 
+# Interne Code-Uebersicht (nicht fuer die Veroeffentlichung)
+code_overview.html
+
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------
