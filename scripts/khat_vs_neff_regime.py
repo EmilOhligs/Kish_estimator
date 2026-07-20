@@ -51,65 +51,14 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from scipy.optimize import brentq
-from scipy.stats import norm, skewnorm
-
+from uq_mace.distributions import StdSkewNormal, shape_for_skew  # noqa: F401
 from uq_mace.reweighting import effective_sample_size, khat_threshold, psis_khat
 
 K_B = 8.617333262e-5  # eV/K
 
 
-# ---------------------------------------------------------------------------
-# Standardisierte Skew-Normal: Form aus gewuenschter Schiefe, exakte Momente
-# ---------------------------------------------------------------------------
-def shape_for_skew(target_skew: float) -> float:
-    """Formparameter a der Skew-Normal fuer eine Zielschiefe (|skew| < 0.995)."""
-    if abs(target_skew) < 1e-12:
-        return 0.0
-    if abs(target_skew) >= 0.995:
-        raise ValueError("Skew-Normal erreicht maximal |Schiefe| ~ 0.995")
-
-    def g(a: float) -> float:
-        d = a / np.sqrt(1.0 + a * a)
-        num = (4.0 - np.pi) / 2.0 * (d * np.sqrt(2.0 / np.pi)) ** 3
-        den = (1.0 - 2.0 * d * d / np.pi) ** 1.5
-        return num / den - target_skew
-
-    lo, hi = (0.0, 60.0) if target_skew > 0 else (-60.0, 0.0)
-    return float(brentq(g, lo, hi))
-
-
-class StdSkewNormal:
-    """Skew-Normal, auf Mittel 0 und Std 1 normiert; mit exakter MGF."""
-
-    def __init__(self, skew: float):
-        self.skew = float(skew)
-        self.a = shape_for_skew(skew)
-        d = self.a / np.sqrt(1.0 + self.a * self.a)
-        self.delta = d
-        self.mu = d * np.sqrt(2.0 / np.pi)          # Mittel der Rohverteilung
-        self.sigma = np.sqrt(1.0 - 2.0 * d * d / np.pi)  # Std der Rohverteilung
-
-    def rvs(self, n: int, rng) -> np.ndarray:
-        x = skewnorm.rvs(self.a, size=n, random_state=rng)
-        return (x - self.mu) / self.sigma
-
-    def exp_moment(self, c: float) -> float:
-        """E[exp(-c*Z)] fuer standardisiertes Z - geschlossene Form.
-
-        MGF der Skew-Normal SN(0,1,a): M(t) = 2 exp(t^2/2) Phi(delta*t).
-        Fuer Z = (X-mu)/sigma gilt E[e^{-cZ}] = e^{c*mu/sigma} * M(-c/sigma).
-        Kontrolle a=0: 2*exp(t^2/2)*0.5 = exp(c^2/2) (lognormal). OK.
-        """
-        t = -c / self.sigma
-        return float(np.exp(c * self.mu / self.sigma) * 2.0
-                     * np.exp(0.5 * t * t) * norm.cdf(self.delta * t))
-
-    def asymptotic_ratio(self, c: float) -> float:
-        """Exaktes N_eff/n im Grenzwert n->oo:  E[w]^2 / E[w^2]."""
-        m1 = self.exp_moment(c)
-        m2 = self.exp_moment(2.0 * c)
-        return float(m1 * m1 / m2)
+# StdSkewNormal / shape_for_skew liegen jetzt in uq_mace.distributions
+# (gemeinsam genutzt mit scripts/convergence_simulation.py).
 
 
 # ---------------------------------------------------------------------------
