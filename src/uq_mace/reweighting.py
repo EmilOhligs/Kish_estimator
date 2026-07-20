@@ -124,6 +124,63 @@ def sample_overlap(weights) -> float:
     return float(np.minimum(p, 1.0 / w.size).sum())
 
 
+def running_moments(x) -> dict:
+    """Laufende Momente: nach jedem neuen x_k Mittel, Std, Schiefe, Kurtosis.
+
+    Vektorisiert ueber kumulative Potenzsummen, O(n). Fuer dE = E_DFT - E_MACE
+    gedacht: liefert die beiden Eingangsgroessen des Gueltigkeitskriteriums des
+    Gauss-Praediktors (c = beta*std und gamma_1), als Funktion des
+    Stichprobenumfangs.
+
+    Zentrale Momente aus Potenzsummen:
+        m2 = <x^2> - mu^2
+        m3 = <x^3> - 3 mu <x^2> + 2 mu^3
+        m4 = <x^4> - 4 mu <x^3> + 6 mu^2 <x^2> - 3 mu^4
+        Schiefe   g1 = m3 / m2^(3/2)          (Populationsversion, wie scipy.stats.skew)
+        Exz.-Kurt g2 = m4 / m2^2 - 3          (wie scipy.stats.kurtosis)
+
+    Numerik: Potenzsummen sind schlecht konditioniert, wenn |x| gross gegen die
+    Streuung ist. Da alle Momente ab dem zweiten VERSCHIEBUNGSINVARIANT sind,
+    wird intern um den Gesamtmittelwert zentriert - das aendert die Ergebnisse in
+    exakter Arithmetik nicht, verbessert die Kondition aber drastisch. (Wichtig,
+    falls jemand die Funktion versehentlich auf Gesamtenergien statt auf dE
+    anwendet: -922 eV mit 8 meV Streuung waere sonst katastrophal.)
+
+    x : 1D-Array in der Reihenfolge, in der die Werte anfallen.
+    Rueckgabe: dict mit k, mean, std (ddof=1), skew, kurtosis - jeweils (n,).
+    NaN, wo zu wenige Punkte fuer das jeweilige Moment vorliegen.
+    """
+    import numpy as np
+
+    x = np.asarray(x, dtype=float)
+    n = x.size
+    shift = x.mean()                 # nur Konditionierung, verschiebungsinvariant
+    y = x - shift
+
+    k = np.arange(1, n + 1)
+    s1 = np.cumsum(y)
+    s2 = np.cumsum(y ** 2)
+    s3 = np.cumsum(y ** 3)
+    s4 = np.cumsum(y ** 4)
+
+    mu = s1 / k
+    m2 = np.maximum(s2 / k - mu ** 2, 0.0)
+    m3 = s3 / k - 3.0 * mu * (s2 / k) + 2.0 * mu ** 3
+    m4 = s4 / k - 4.0 * mu * (s3 / k) + 6.0 * mu ** 2 * (s2 / k) - 3.0 * mu ** 4
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        std = np.sqrt(np.where(k > 1, m2 * k / np.maximum(k - 1, 1), np.nan))
+        skew = np.where(m2 > 0, m3 / np.power(m2, 1.5), np.nan)
+        kurt = np.where(m2 > 0, m4 / (m2 ** 2) - 3.0, np.nan)
+
+    # zu wenige Punkte -> undefiniert
+    std[:1] = np.nan
+    skew[:2] = np.nan
+    kurt[:3] = np.nan
+
+    return dict(k=k, mean=mu + shift, std=std, skew=skew, kurtosis=kurt)
+
+
 def running_neff_cv(weights) -> dict:
     """Iterative N_eff-Schaetzung ueber den CV-Zusammenhang.
 
