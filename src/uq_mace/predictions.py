@@ -3,7 +3,7 @@
 Laesst jedes Ensemble-Member EINMAL ueber einen Testsatz laufen und cacht die
 per-Frame-Energien und per-Atom-Kraefte nach
 
-    results/predictions_<ensemble>_test<testset>.npz
+    cache/predictions_<ensemble>_test<testset>.npz
 
 So greifen alle nachgelagerten Analysen (Energy/Force-RMSE, sigma-Fehler-
 Korrelation, Reweighting-Gewichte w_i) auf IDENTISCHE Zahlen zu, und die teure
@@ -30,11 +30,34 @@ from .ensemble import MODELS_DIR
 from .evaluation import evaluate_ensemble_members, reference_energies_forces
 
 TEST_SETS = {"big": TEST_SET_BIG, "small": TEST_SET_SMALL}
-RESULTS_DIR = Path(__file__).resolve().parents[2] / "results"
+
+# Gemeinsamer Cache fuer alle Analysen unter analyses/. Bewusst NICHT in einem
+# Themenordner, weil mehrere Analysen dieselben MACE-Vorhersagen brauchen und
+# MACE nur einmal je (Ensemble, Testsatz) laufen soll.
+CACHE_DIR = Path(__file__).resolve().parents[2] / "cache"
 
 
 def cache_path(ensemble: str, testset: str) -> Path:
-    return RESULTS_DIR / f"predictions_{ensemble}_test{testset}.npz"
+    return CACHE_DIR / f"predictions_{ensemble}_test{testset}.npz"
+
+
+def find_energy_cache(ensemble: str, testset: str) -> Path | None:
+    """Irgendeinen vorhandenen Energie-Cache fuer (ensemble, testset) finden.
+
+    Sucht der Reihe nach:
+      1. cache/predictions_*.npz    (aktuelles Format, Energien + Kraefte)
+      2. cache/mace_energies_*.npz  (aelteres Format, nur Energien)
+
+    Gibt None zurueck, wenn keiner existiert - dann muss MACE laufen. Verhindert,
+    dass eine Analyse eine teure Inferenz startet, obwohl brauchbare Energien
+    unter einem anderen Dateinamen bereits vorliegen.
+    """
+    for name in (f"predictions_{ensemble}_test{testset}.npz",
+                 f"mace_energies_{ensemble}_test{testset}.npz"):
+        p = CACHE_DIR / name
+        if p.exists():
+            return p
+    return None
 
 
 def _to_object_array(seq) -> np.ndarray:

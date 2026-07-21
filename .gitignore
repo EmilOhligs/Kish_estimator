@@ -40,12 +40,13 @@ dist/
 # ---------------------------------------------------------------------------
 # Rechenergebnisse
 # ---------------------------------------------------------------------------
-# Plots in results/ bleiben absichtlich getrackt (klein, dokumentieren Befunde).
-# Die abgeleiteten Energie-/Vorhersage-Caches dagegen nicht: sie sind gross,
-# jederzeit reproduzierbar und enthalten DFT-Energien aus data/.
-results/predictions_*.npz
-results/mace_energies_*.npz
-results/weights_*.npz
+# Plots und CSVs in analyses/<thema>/ bleiben absichtlich getrackt: sie sind
+# klein und dokumentieren die Befunde direkt neben dem erzeugenden Skript.
+#
+# Der gemeinsame Cache dagegen nicht: gross, jederzeit reproduzierbar, und er
+# enthaelt DFT-Energien aus data/ (das nicht veroeffentlicht werden soll).
+cache/
+analyses/**/*.npz
 
 # Trainings-Logs
 logs/

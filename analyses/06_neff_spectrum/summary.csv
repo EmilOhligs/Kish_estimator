@@ -1,0 +1,3 @@
+name,label,cv,neff,neff_ratio,khat,khat_threshold,reliable
+konstant,Konstant (w=1),0.0,300.0,1.0,0.0,0.5963,True
+pareto_a125,Pareto(alpha=1.25),1.3207,109.3,0.3644,0.6288,0.5963,False
