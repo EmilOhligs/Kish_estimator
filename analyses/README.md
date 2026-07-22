@@ -32,6 +32,8 @@ Die Nummerierung folgt der logischen Kette, nicht der Entstehungsreihenfolge.
 | **08_synthetic_basics** | Grundverständnis von N_eff (synthetische Gewichte) | N_eff/n = 1/(1+CV²), verteilungsfrei |
 | **09_ensemble_evaluation** | RMSE und σ(R)-vs-Fehler je Ensemble | Grundlage des DFT-freien Pfads |
 | **10_training** | Neue MACE-Member trainieren | GPU-Job |
+| **11_error_correlation** | Sind die Kraftfehler räumlich korreliert? | Zerfall auf Grundlinie ab ~2.5 Å; √N nicht widerlegt (Hochpassfilter, k→0 blind) |
+| **12_screening** | Trägt das Modell — **vor** der MD? | c aus dem Testsatz, +8.7 % Ensemble-Korrektur, √N auf 128 Mol.: 0.804 vs. Paper 0.814. `validate_ensemble_shift.py` beweist die Korrektur an analytisch bekannter Wahrheit und zeigt die Abdeckungsgrenze |
 
 ---
 
@@ -76,3 +78,4 @@ Die inhaltliche Auswertung steht in `notebooks/` (nicht im Repo veröffentlicht)
 - `gauss_naeherung_gueltigkeit.md` — Kumulantenherleitung mit allen Annahmen
 - `regime_studie_methodik.md` — warum c = β·std(ΔE) die richtige Achse ist
 - `plan_konvergenz_simulation.md` — Versuchsplan zu 07
+- `ensemble_korrektur.md` — Herleitung zu 12, mit numerischer Prüfung und offener Prämisse

@@ -248,3 +248,121 @@ def neff_leave_one_out(energies, beta: float) -> float:
     var_eps /= m
     var_pred = var_eps * (1.0 + 1.0 / m)
     return float(n * np.exp(-(beta ** 2) * var_pred))
+
+
+# ---------------------------------------------------------------------------
+# Ensemble-Korrektur: c vom Testsatz auf den Produktionslauf uebertragen
+# ---------------------------------------------------------------------------
+
+def neff_ratio_cumulant(c: float, gamma1: float = 0.0, gamma2: float = 0.0) -> float:
+    """N_eff/n aus der Kumulantenentwicklung.
+
+        log(N_eff/n) = -c^2 + gamma_1 c^3 - (7/12) gamma_2 c^4 + O(c^5)
+
+    gamma1 = gamma2 = 0 liefert den reinen Gauss-Praediktor exp(-c^2).
+    Ab c ~ 1 unbrauchbar (Restterm (2c)^5/5! nicht mehr klein).
+    """
+    import numpy as np
+
+    return float(np.exp(-c ** 2 + gamma1 * c ** 3 - (7.0 / 12.0) * gamma2 * c ** 4))
+
+
+def ensemble_shift(delta_e, beta: float) -> dict:
+    """c vom DFT-gesampelten Testsatz auf das MACE-Ensemble umrechnen.
+
+    DAS PROBLEM. Der Testsatz wurde (Annahme!) aus p_DFT gezogen, der
+    Produktionslauf laeuft dagegen als MD auf dem MACE-Potential, sampelt also
+    p_MACE. Die Landschaft dE(R) ist dieselbe, aber ihre STREUUNG haengt davon
+    ab, welche Konfigurationen man besucht. Das ist kein Stichprobenfehler - er
+    verschwindet nicht mit n -> unendlich.
+
+    DIE BEZIEHUNG. Beide Ensembles haengen ueber genau die Reweighting-Identitaet
+    zusammen, die auch die Gewichte definiert:
+
+        p_DFT(R) = w(R) p_MACE(R) / <w>,      w = exp(-beta dE)
+
+    Rueckwaerts, also von den DFT-gesampelten Testframes ins MACE-Ensemble, ist
+    demnach mit 1/w = exp(+beta dE) zu gewichten. Das ist hier EXAKT ausgefuehrt
+    (Schluessel 'c_exact'), nicht genaehert.
+
+    ERSTE ORDNUNG. Entwickelt man w ~ 1 - beta dE, folgt fuer eine beliebige
+    Observable A der uebliche Stoerungsausdruck erster Ordnung
+
+        <A>_DFT ~ <A>_MACE - beta Cov_MACE(A, dE)
+
+    und mit A = (dE - mu)^2 wird Cov(A, dE) = <(dE-mu)^3> = gamma_1 sigma^3, also
+
+        c_prod ~ c_test (1 + gamma_1 c / 2)                     ('c_first_order')
+
+    Die Schiefe taucht auf, weil die Frage "wie verschiebt sich die BREITE" nach
+    dem dritten Moment fragt. Bei symmetrischem dE passiert in erster Ordnung
+    nichts. Vorzeichen: gamma_1 > 0 -> c_prod > c_test, die Testsatz-Schaetzung
+    ist OPTIMISTISCH. Anschaulich: die MACE-MD uebersampelt Konfigurationen mit
+    grossem positivem dE, also solche, die MACE fuer guenstiger haelt als sie
+    sind - sie laeuft in ihre eigenen blinden Flecken.
+
+    ZWEI VORBEHALTE.
+      * Die Praemisse p_test = p_DFT ist UNGEPRUEFT. Wurde der Testsatz mit einem
+        anderen Potential erzeugt statt per AIMD, ist die Korrektur nur eine
+        Groessenordnung, keine Zahl.
+      * Die Rueckwaerts-Umgewichtung hat ihr eigenes N_eff ('neff_backward').
+        Ist das klein, ist 'c_exact' selbst verrauscht und die Entwicklung erster
+        Ordnung womoeglich der stabilere Wert. Immer mit ausgeben.
+
+    delta_e : (n,) dE = E_DFT - E_MACE je Frame [eV]
+    beta    : 1/(k_B T) [1/eV]
+
+    Rueckgabe: dict mit c_test, c_exact, c_first_order, gamma1, gamma2,
+               neff_backward, n.
+    """
+    import numpy as np
+
+    d = np.asarray(delta_e, dtype=float).ravel()
+    n = d.size
+    mu = d.mean()
+    sigma = d.std(ddof=1)
+    c_test = beta * sigma
+    u = d - mu
+    gamma1 = float((u ** 3).mean() / sigma ** 3)
+    gamma2 = float((u ** 4).mean() / sigma ** 4 - 3.0)
+
+    # exakte Rueckwaerts-Umgewichtung p_DFT -> p_MACE mit 1/w = exp(+beta dE);
+    # Maximum abziehen, sonst ueberlaeuft exp bei grossem c
+    log_r = beta * u
+    r = np.exp(log_r - log_r.max())
+    mean_m = (r * d).sum() / r.sum()
+    var_m = (r * (d - mean_m) ** 2).sum() / r.sum()
+    c_exact = float(beta * np.sqrt(var_m))
+    neff_backward = float(r.sum() ** 2 / (r ** 2).sum())
+
+    return dict(
+        n=n, c_test=float(c_test), gamma1=gamma1, gamma2=gamma2,
+        c_exact=c_exact,
+        c_first_order=float(c_test * (1.0 + 0.5 * gamma1 * c_test)),
+        neff_backward=neff_backward,
+    )
+
+
+def scale_to_system_size(c: float, gamma1: float, gamma2: float,
+                         n_from: int, n_to: int) -> dict:
+    """c, gamma_1, gamma_2 von n_from auf n_to Molekuele skalieren.
+
+    Unter der Annahme, dass dE eine Summe aus N/n_xi UNABHAENGIGEN lokalen
+    Beitraegen ist (zentraler Grenzwertsatz), gilt
+
+        c ∝ sqrt(N),    gamma_1 ∝ N^(-1/2),    gamma_2 ∝ N^(-1)
+
+    Die Schiefe faellt also mit, waehrend c steigt - die Skalierung ist damit
+    selbstkonsistent und nicht bloss eine Verschiebung entlang c.
+
+    ACHTUNG: die Unabhaengigkeitsannahme ist genau die, die 11_error_correlation
+    prueft. Sie ist dort fuer den messbaren Bereich (1-6 A) nicht widerlegt
+    worden, aber der langwellige Anteil (k -> 0) bleibt unzugaenglich, weil der
+    Kraftfehler als Gradient ein Hochpassfilter ist. Ergebnisse dieser Funktion
+    sind daher Prognosen unter einer plausiblen, nicht bewiesenen Annahme.
+    """
+    import numpy as np
+
+    s = np.sqrt(n_to / n_from)
+    return dict(n_molecules=n_to, c=float(c * s),
+                gamma1=float(gamma1 / s), gamma2=float(gamma2 / s ** 2))

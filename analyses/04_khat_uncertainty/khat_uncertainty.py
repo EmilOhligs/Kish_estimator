@@ -99,7 +99,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--weights", default="cache/mace_energies_ensemble_L2c_testbig.npz",
                     help="fertige w_i ODER Energie-Cache mit e_dft/e_mace")
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     ap.add_argument("--boot", type=int, default=2000, help="Bootstrap-Wiederholungen (Endwert)")
     ap.add_argument("--boot-m", type=int, default=400, help="Bootstrap-Wdh. je M (Band)")
     ap.add_argument("--m-points", type=int, default=22, help="Stuetzstellen der M-Achse")

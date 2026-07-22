@@ -99,7 +99,7 @@ def main():
     ap.add_argument("--real", default=None,
                     help="npz mit e_dft/e_mace: misst c und Schiefe der echten Daten "
                          "und markiert den Punkt in den Plots")
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     ap.add_argument("--outdir", default=None, help="Ausgabeordner (Default: neben dem Skript)")
     args = ap.parse_args()
 

@@ -73,7 +73,7 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--energies", default="cache/mace_energies_ensemble_L2c_testbig.npz",
                     help="npz mit e_dft und e_mace/energies")
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     ap.add_argument("--shuffles", type=int, default=100)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--outdir", default=None, help="Ausgabeordner (Default: neben dem Skript)")

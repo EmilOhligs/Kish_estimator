@@ -1,0 +1,5 @@
+model,c_final,neff_ratio_kish,neff_ratio_pred_c,pred_dev_pct,khat,verdict,k_median,k95,pct_dft_saved,misfire_pct
+mace-L0-01,1.2376,0.3606,0.2977,-17.44,0.0501,FAIL,5,10,98.5,0.80
+mace-L0-c-01,1.0794,0.3821,0.3581,-6.27,0.4160,FAIL,6,12,98.2,0.80
+mace-L2-c-01,0.3348,0.9067,0.9066,-0.01,-0.0864,PASS,5,30,97.5,0.00
+ensemble_L2c,0.3267,0.9125,0.9122,-0.03,0.0678,PASS,5,23,97.7,0.00

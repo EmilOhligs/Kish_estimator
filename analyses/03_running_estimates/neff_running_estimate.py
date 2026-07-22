@@ -167,7 +167,7 @@ def main():
     ap.add_argument("--ensemble", default="ensemble_L2c",
                     choices=["ensemble_L2c", "ensemble_L0c", "ensemble_L0"])
     ap.add_argument("--testset", default="big", choices=["big", "small"])
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)

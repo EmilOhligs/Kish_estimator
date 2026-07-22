@@ -46,8 +46,8 @@ from uq_mace.reweighting import psis_khat, running_moments
 HERE = Path(__file__).resolve().parent   # Ausgaben landen neben dem Skript
 K_B = 8.617333262e-5  # eV/K
 
-# Messwerte aus cache/mace_energies_ensemble_L2c_testbig.npz (L2c, 400 Frames, 300 K)
-REAL_C = 0.3180
+# Messwerte aus cache/mace_energies_ensemble_L2c_testbig.npz (L2c, 400 Frames, 292 K)
+REAL_C = 0.3267
 REAL_SKEW = 0.5027
 REAL_KURT = 0.4071
 REAL_N = 400
@@ -310,7 +310,7 @@ def make_plots(A, B, D, E, err_true, outdir, ns):
 
     fig.suptitle("Konvergenz von $c$ und $\\gamma_1$: intrinsisch vs. Pool-Artefakt\n"
                  f"Generator: Skew-Normal, $\\gamma_1$={REAL_SKEW:.3f}, c={REAL_C:.3f} "
-                 f"(kalibriert auf L2c/testbig/300 K)", fontsize=12)
+                 f"(kalibriert auf L2c/testbig/292 K)", fontsize=12)
     fig.subplots_adjust(top=0.88, hspace=0.28, wspace=0.22,
                         left=0.07, right=0.97, bottom=0.07)
     fig.savefig(outdir / "convergence_pool_effect.png", dpi=140)

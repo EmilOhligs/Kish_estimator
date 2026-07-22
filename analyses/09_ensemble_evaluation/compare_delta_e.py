@@ -189,7 +189,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--testset", default="big", choices=["big", "small"])
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     ap.add_argument("--device", default="cpu",
                     help="cpu | cuda (NVIDIA, z.B. VSC) | mps (Apple Silicon)")
     ap.add_argument("--only", default=None,

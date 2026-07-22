@@ -182,7 +182,7 @@ def main():
                     help="Modell-Ensemble fuer E_MACE (default: ensemble_L2c wie Paper)")
     ap.add_argument("--testset", default="big", choices=["big", "small"],
                     help="big = water_testset_big.xyz (400, 189 Atome); small = 125 gemischt")
-    ap.add_argument("--temperature", type=float, default=300.0,
+    ap.add_argument("--temperature", type=float, default=292.0,
                     help="Temperatur in K fuer beta = 1/(k_B T) (default 300)")
     ap.add_argument("--force", action="store_true",
                     help="Energien neu berechnen statt Cache zu nutzen")

@@ -89,7 +89,7 @@ def main():
     ap.add_argument("--models", nargs="+", default=None,
                     help="Pfade zu .model-Dateien (Default: je erstes Member von L0 und L0c)")
     ap.add_argument("--testset", default="big", choices=["big", "small"])
-    ap.add_argument("--temperature", type=float, default=300.0)
+    ap.add_argument("--temperature", type=float, default=292.0)
     ap.add_argument("--device", default="cpu", help="cpu | cuda | mps")
     ap.add_argument("--force", action="store_true", help="Cache ignorieren")
     args = ap.parse_args()

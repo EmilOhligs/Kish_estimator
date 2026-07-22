@@ -96,7 +96,7 @@ def load_energies(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
     return e_dft, e_mace
 
 
-def load_weights(path: str | Path, temperature: float = 300.0) -> np.ndarray:
+def load_weights(path: str | Path, temperature: float = 292.0) -> np.ndarray:
     """Gewichte w_i aus einer vorhandenen Datei beschaffen - ohne MACE-Neulauf.
 
     Erkennt automatisch:
