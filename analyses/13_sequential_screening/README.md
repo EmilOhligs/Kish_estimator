@@ -12,10 +12,24 @@ $c = \beta\,\mathrm{std}(\Delta E)$ konvergiert schnell und liegt weit über der
 Skript: `sequential_screening.py` · Ausgaben: `sequential_workflow_R*.png`,
 `sequential_khat_R*.png`, `sequential_screening_R*.csv`
 
-> **Abgrenzung.** Für den *Produktionslauf* liegt $n = 5000$ fest (Volumen-Resampling),
-> dort gibt es nichts zu sparen — siehe `notebooks/map.md`. Das Sparen greift beim
-> **Modell-Screening**: „lohnt sich dieses Modell überhaupt?" Dort bricht man ab, bevor
-> der ganze Testsatz durchgerechnet ist.
+> **Wann sich das Sparen lohnt — Kostenlogik.** Entscheidend ist, welcher Teil teuer ist.
+>
+> | Modell | MD | DFT | teurer Teil | sequenzielles DFT-Sparen |
+> |---|---|---|---|---|
+> | **L2** (groß, langsam) | hoch | mittel | MD | bringt wenig (zirkulär) |
+> | **L0** (klein, schnell) | niedrig | mittel | **DFT** | **lohnt sich** |
+>
+> Bei **L0** ist die MD billig, also dominieren die DFT-Einzelpunkte die Kosten. Rechnet
+> man sie auf den MD-Frames **nacheinander** und sieht früh, dass $c$ weit über der
+> Schwelle liegt, bricht man ab und spart den Großteil der DFT-Kampagne — statt eine
+> aussichtslose Reweighting-Rechnung zu Ende zu ziehen. Das ist der von Tobi genannte
+> Anwendungsfall. Die Konvergenz von $c$, $\gamma_1$ bei kleinem $k$ (unten) ist damit
+> **direkt die Auszahlung**: sie bestimmt, nach wie wenigen DFT-Punkten das Urteil steht.
+>
+> Bei **L2** dominiert dagegen die MD; dort spart frühes DFT-Abbrechen wenig. Und die
+> Zahl der Reweighting-Frames $n = 5000$ selbst liegt fest (Volumen-Resampling,
+> `notebooks/map.md`) — reduziert wird nicht das finale $n$, sondern der DFT-Aufwand für
+> die *Entscheidung*, ob sich der Lauf überhaupt lohnt.
 
 ---
 

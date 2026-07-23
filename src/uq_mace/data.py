@@ -23,6 +23,7 @@ DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 TRAIN_SET = DATA_DIR / "water_train.xyz"
 TEST_SET_BIG = DATA_DIR / "water_testset_big.xyz"
 TEST_SET_SMALL = DATA_DIR / "water_test_small.xyz"
+TEST_SET_FULL = DATA_DIR / "results_all_corrected.xyz"   # 14811 Frames, 63 H2O
 
 
 def load_trajectory(path: str | Path) -> list[Atoms]:
