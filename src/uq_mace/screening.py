@@ -24,16 +24,15 @@ Alle Funktionen ziehen beta und R aus einem Modulkontext, der einmal gesetzt wir
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import brentq
 
 from .reweighting import running_moments
 
 __all__ = [
     "configure", "context",
-    "K_FLOOR", "Q_ALPHA", "CHECKPOINTS", "checkpoint_grid", "C_VALID",
-    "cmax_gauss", "cmax_skew", "cmax_skew_vec", "log_neff_ratio",
+    "K_FLOOR", "Q_ALPHA", "CHECKPOINTS", "checkpoint_grid", "C_VALID", "R5_TOL",
+    "cmax_gauss", "cmax_skew", "cmax_skew_vec", "log_neff_ratio", "diagnose",
     "run_stats", "run_stats_2d", "se_c",
-    "decide_naive", "fail_only_2d", "stat_D", "monitor_boot",
+    "decide_naive", "fail_only_2d", "stat_D", "monitor_boot", "monitor_split",
 ]
 
 # ---------------------------------------------------------------------------
@@ -45,6 +44,10 @@ K_FLOOR = 50         # erster Blick; Faustregel: 10 % der geplanten Punkte (sieh
 R5_TOL  = 0.05       # zulaessiges Restglied (2c)^5/5! der Kumulantenreihe
 C_VALID = 0.5 * (120.0 * R5_TOL) ** 0.2     # ~0.716: darueber ist die Reihe wertlos
 Q_ALPHA = 1.64       # Quantil der Standardnormalverteilung (einseitig 5 %).
+                     # Nur noch fuer die VERGLEICHSFASSUNGEN decide_naive,
+                     # fail_only_2d und monitor_boot. Die verwendete Regel
+                     # monitor_split legt je ein Band um c und um c_max; dort
+                     # ist q kein Niveau mehr und der Default ist 1.
                      # NICHT zu verwechseln mit dem standardisierten z aus der
                      # Herleitung -- siehe Notebook §2.2.
 def checkpoint_grid(n: int, first_frac: float = 0.10, ratio: float = 1.4):
@@ -111,26 +114,29 @@ def cmax_skew(R: float, g1: float, g2: float, c_hi: float | None = None,
       Grenze, nicht auf die Gauss-Schranke. Letztere liegt TIEFER als die wahre
       Schranke und liesse den FAIL-only-Monitor zu frueh feuern.
 
-    Kein naives Bracketing ueber das ganze Intervall: fuer gamma2 < 0 kippt f(c)
-    bei grossem c wieder unter null, ein Bracket [0, c_hi] haette dann u.U. keinen
-    Vorzeichenwechsel, obwohl die gesuchte kleinste Wurzel existiert. Deshalb wird
-    der erste Aufwaertsdurchgang auf einem Gitter gesucht und nur dort gebracket.
+    Kein Bracket-Verfahren: fuer gamma2 < 0 kippt f(c) bei grossem c wieder unter
+    null, ein Bracket [0, c_hi] haette dann u.U. keinen Vorzeichenwechsel, obwohl
+    die gesuchte kleinste Wurzel existiert. Stattdessen wird die Quartik ueber die
+    Begleitmatrix vollstaendig faktorisiert (numpy.roots, |f(c)| ~ 1e-17) und die
+    kleinste positive Wurzel genommen. Damit entfaellt die Frage nach Bracket und
+    Startwert ganz -- die zweite Wurzel faellt weg, weil sie nicht die kleinste ist.
+
+    Nebeneffekte, die den frueheren Gitter-Vorlauf ersetzen:
+    * gamma2 == 0 -> numpy.roots streicht den Leitkoeffizienten und loest die Kubik.
+    * gamma2 ~ 1e-16 -> erzeugt eine Scheinwurzel bei ~1e16, die nie die kleinste ist.
+    * Keine Gitterweite mehr, an der zwei eng benachbarte Wurzeln haengenbleiben
+      koennten (das alte Raster loeste nur c_hi/2000 ~ 3.6e-4 auf).
     """
     c_hi = C_VALID if c_hi is None else c_hi
-    target = -np.log(R)
-
-    def f(c):
-        return c**2 - g1 * c**3 + (7 / 12) * g2 * c**4 - target
-
-    grid = np.linspace(1e-4, c_hi, 2000)
-    fv = f(grid)
-    up = np.where((fv[:-1] < 0) & (fv[1:] >= 0))[0]
-    if up.size == 0:
+    roots = np.roots([(7 / 12) * g2, -g1, 1.0, 0.0, np.log(R)])
+    pos = [r.real for r in roots
+           if abs(r.imag) <= 1e-8 * max(1.0, abs(r.real)) and 1e-12 < r.real < c_hi]
+    if not pos:
         if warn:
             print(f"    [Hinweis] cmax_skew: keine Wurzel unterhalb C_VALID fuer "
                   f"g1={g1:+.3f}, g2={g2:+.3f} -> konservativer Rueckfall {c_hi:.3f}")
         return float(c_hi)
-    return float(brentq(f, grid[up[0]], grid[up[0] + 1]))
+    return float(min(pos))
 
 
 def cmax_skew_vec(g1, g2, iters: int = 8):
@@ -176,6 +182,49 @@ def cmax_skew_vec(g1, g2, iters: int = 8):
 def log_neff_ratio(c, g1, g2):
     """log(N_eff/n) nach der Kumulantenentwicklung: -c^2 + g1 c^3 - 7/12 g2 c^4."""
     return -c**2 + g1 * c**3 - (7 / 12) * g2 * c**4
+
+
+def diagnose(R: float, g1: float, g2: float, rem_tol: float = R5_TOL) -> list[str]:
+    """Voraussetzungen der Quartik pruefen -- einmal pro Modell, nicht pro Aufruf.
+
+    Leere Liste = alles in Ordnung. Geprueft wird:
+
+    * **Eindeutigkeit.** f'(c) = c [(7/3) g2 c^2 - 3 g1 c + 2]; die Klammer hat
+      keine positive Nullstelle, wenn g1 <= 0 <= g2 oder g1^2 < (56/27) g2. Dann
+      ist f streng monoton auf (0, inf) und die Wurzel eindeutig. Sonst kann es
+      weitere geben -- cmax_skew nimmt die kleinste, was richtig ist, aber die
+      Situation sollte sichtbar sein.
+    * **N_eff <= n.** Cauchy-Schwarz erzwingt log(N_eff/n) <= 0. Die abgebrochene
+      Reihe verletzt das ab der kleinsten positiven Wurzel von
+      -(7/12) g2 c^2 + g1 c - 1 = 0; existiert die (d.h. g1^2 >= (7/3) g2) und
+      liegt c_max jenseits davon, ist der Wert bedeutungslos.
+    * **A2-Restglied.** (2 c_max)^5 / 5! <= rem_tol.
+    """
+    out: list[str] = []
+    c = cmax_skew(R, g1, g2, warn=False)
+
+    if not (g1 <= 0.0 <= g2 or (g2 > 0.0 and g1**2 < (56 / 27) * g2)):
+        out.append(f"f nicht streng monoton (g1^2={g1**2:.4g} vs "
+                   f"(56/27) g2={(56/27)*g2:.4g}) - weitere positive Wurzeln "
+                   f"moeglich; kleinste gewaehlt")
+
+    if g1**2 >= (7 / 3) * g2:
+        a = -(7 / 12) * g2
+        if abs(a) < 1e-300:
+            c_abs = 1.0 / g1 if g1 > 0 else np.inf
+        else:
+            sq = np.sqrt(g1**2 - (7 / 3) * g2)
+            cand = [x for x in ((-g1 + sq) / (2 * a), (-g1 - sq) / (2 * a)) if x > 0]
+            c_abs = min(cand) if cand else np.inf
+        if c >= c_abs:
+            out.append(f"c_max={c:.4f} liegt jenseits der Gueltigkeitsgrenze "
+                       f"c_abs={c_abs:.4f}, wo die Reihe N_eff > n behauptet")
+
+    rem = (2.0 * c) ** 5 / 120.0
+    if rem > rem_tol:
+        out.append(f"A2-Restglied (2c)^5/5!={rem:.3g} > {rem_tol} - Reihe bei "
+                   f"c_max nicht mehr belastbar")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +346,72 @@ def monitor_boot(D_seq, q: float = Q_ALPHA, B: int = 100, rng=None,
             boot = np.take_along_axis(sub[:, None, :], idx, axis=2)
             se[a:b] = stat_D(boot.reshape(-1, k))[0].reshape(b - a, B).std(1)
         sel = todo[Dk > q * se]
+        fired[sel] = True
+        kfire[sel] = k
+    return fired, kfire
+
+
+def monitor_split(D_seq, q: float = 1.0, B: int = 100, rng=None,
+                  chunk: int = 250, checkpoints=None, k_floor: int = K_FLOOR):
+    """Die verwendete Regel: FAIL, sobald das Band um c ueber dem um c_max liegt.
+
+        c(k) - q SE(c)  >  c_max(k) + q SE(c_max)
+        <=>  D(k)  >  q ( SE(c) + SE(c_max) )
+
+    **q = 1, ein Standardfehler je Seite.** Der Default ist bewusst 1 und nicht
+    Q_ALPHA: bei zwei verglichenen Baendern ist q kein Niveau. Nichtueberlappende
+    Konfidenzbaender sind ein konservativer Test fuer eine Differenz, ein
+    nominelles 5 %-q waere effektiv ~0.5 %. Statt eine Niveauaussage zu treffen,
+    die nicht haelt, ist die Bandbreite eine Konvention -- und q = 1 reproduziert
+    gemessen den Arbeitspunkt, den monitor_boot bei q = 1.64 hatte (Grauzone
+    rho = 0.9 .. 1.4: Fehlalarm 0.2/2.0/8.5 %, Erkennung 39/76/99/100 %, gegen
+    0.2/2.5/12.2 % und 41/76/99/100 %). Die Umgebung ist kein Plateau -- +-0.3
+    in q verschiebt die Erkennung um gut 30 Prozentpunkte (§8.4), die Wahl ist
+    also real, nur nicht mehr als Niveau verkleidet.
+
+    Unterschied zu monitor_boot, das D(k) > q SE(D) prueft: dort wird EIN Band
+    um die Differenz gelegt, hier je eins um beide Groessen. Wegen
+    SE(D)^2 = SE(c)^2 + SE(c_max)^2 - 2 Cov ist die Summe stets groesser als
+    SE(D); bei GLEICHEM q kann monitor_split also nie frueher feuern als
+    monitor_boot. Bei gleicher Fehlalarmrate durchlaufen beide dieselbe
+    Guetekurve -- die Wahl ist eine Frage der Erklaerbarkeit, nicht der Leistung.
+
+    Die beiden Standardfehler kommen aus verschiedenen Quellen, und zwar aus
+    gutem Grund (siehe §8.3):
+
+    * **SE(c) analytisch**, se_c(c, g2, k) = c sqrt((g2+2)/4k). Gegen den
+      Bootstrap DERSELBEN Sequenz gemessen trifft die Formel auf 3 %
+      (1.006 +- 0.029 bei k=50, 1.008 +- 0.035 bei k=400).
+    * **SE(c_max) gebootstrappt.** Die analoge Delta-Methode ueber
+      dc/dg1 = c^3/f' mit Var(g1) ~ 6/k versagt: im Mittel 63 % zu hoch, bei
+      k = 56 Ausreisser bis Faktor 66, weil f'(c_max) im Nenner steht und bei
+      verrauschtem g1 gegen null gehen kann. Kein Korrekturfaktor rettet das,
+      die Streuung des Verhaeltnisses ist groesser als sein Mittelwert.
+
+    Signatur, Rueckgabe und Bootstrap-Aufwand sind identisch zu monitor_boot;
+    aus denselben Resamples wird nur eine andere Streuung gebildet.
+    """
+    if rng is None:
+        rng = np.random.default_rng(0)
+    ck = checkpoint_grid(D_seq.shape[1]) if checkpoints is None else np.asarray(checkpoints)
+    ck = ck[(ck <= D_seq.shape[1]) & (ck >= k_floor)]
+    n = D_seq.shape[0]
+    fired = np.zeros(n, dtype=bool)
+    kfire = np.full(n, -1)
+    for k in ck:
+        todo = np.where(~fired)[0]
+        if todo.size == 0:
+            break
+        Dk, ck_pt, _, g2k = stat_D(D_seq[todo, :k])
+        se_cmax = np.empty(todo.size)
+        for a in range(0, todo.size, chunk):
+            b = min(a + chunk, todo.size)
+            sub = D_seq[todo[a:b], :k]
+            idx = rng.integers(0, k, (b - a, B, k))
+            boot = np.take_along_axis(sub[:, None, :], idx, axis=2).reshape(-1, k)
+            Db, cb, _, _ = stat_D(boot)
+            se_cmax[a:b] = (cb - Db).reshape(b - a, B).std(1)   # c_max = c - D
+        sel = todo[Dk > q * (se_c(ck_pt, g2k, k) + se_cmax)]
         fired[sel] = True
         kfire[sel] = k
     return fired, kfire
