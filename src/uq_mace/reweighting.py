@@ -1,6 +1,5 @@
 """Thermodynamic reweighting and effective sample size (N_eff).
 
-    <A>_DFT ~ sum_i A_i * w_i / sum_i w_i
     w_i = exp(-beta * (E_DFT(R_i) - E_MACE(R_i)))
     N_eff = (sum_i w_i)^2 / sum_i w_i^2
 """
@@ -12,18 +11,13 @@ import numpy as np
 def reweighting_weights(e_dft: np.ndarray, e_model: np.ndarray, beta: float) -> np.ndarray:
     """Unnormalized reweighting weights for a set of configurations."""
     delta_e = e_dft - e_model
-    delta_e = delta_e - delta_e.min()  # numerical stability, does not change N_eff
+    delta_e = delta_e - delta_e.min()  # numerical stability, does not change N_eff because it is a constant offset 
     return np.exp(-beta * delta_e)
 
 
 def effective_sample_size(weights: np.ndarray) -> float:
     """N_eff = (sum w)^2 / sum(w^2). Ranges from 1 (single dominant sample) to N."""
     return float(weights.sum() ** 2 / np.sum(weights ** 2))
-
-
-def reweighted_average(observable: np.ndarray, weights: np.ndarray) -> float:
-    return float(np.sum(observable * weights) / np.sum(weights))
-
 
 # ---------------------------------------------------------------------------
 # Task 1 (H0): N_eff prediction and reweighting diagnostics
