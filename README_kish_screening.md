@@ -5,12 +5,11 @@ Beantwortet für einen Satz DFT- und ML-Energien eine Frage:
 > **Wird thermodynamisches Reweighting auf diesen Daten statistisch tragen — und
 > hätte man den teuren Teil der Rechnung früher abbrechen können?**
 
-Eine Datei, nur numpy, über die Kommandozeile bedienbar, mit Exit-Codes für die
-Verwendung in Shell-Skripten.
+Eine Datei, nur numpy. Version 1.1.
 
 ---
 
-## 1. Wozu
+## 1. Die Größe, um die es geht
 
 Reweighting korrigiert Mittelwerte eines ML-Potentials auf DFT-Niveau:
 
@@ -23,329 +22,342 @@ Ob das etwas taugt, hängt daran, wie ungleich die Gewichte werden. Das misst de
 $$\frac{N_\text{eff}}{n} = \frac{(\sum_i w_i)^2}{n\sum_i w_i^2}\ \in (0,1].$$
 
 Bei $N_\text{eff}/n = 0{,}9$ verhält sich die umgewichtete Stichprobe wie 90 %
-unabhängiger Punkte. Bei 0,2 ist die Rechnung praktisch wertlos, egal wie viele
-Frames man noch anhängt — das Kriterium ist **skalenfrei**, mehr Punkte helfen
-nicht.
-
-Die DFT-Rechnungen sind der teure Teil. Deshalb zwei Ausgaben:
-
-1. **Das Urteil auf dem vollen Satz** — taugt das Modell?
-2. **Die Simulation des sequenziellen Monitors** — nach wie vielen Punkten hätte
-   man das schon gewusst und abbrechen können?
+unabhängiger Punkte. Das Kriterium $N_\text{eff}/n \ge R$ ist **skalenfrei** —
+mehr Frames helfen nicht, wenn die Gewichtsverteilung schlecht ist.
 
 ---
 
-## 2. Voraussetzungen
+## 2. Der Formalismus
 
-Python 3.9 oder neuer und **numpy**. Sonst nichts.
+Mit $\Delta E = \mu + \sigma z$ wird $w = e^{-\beta\mu}\cdot e^{-cz}$. Der Offset
+kürzt sich heraus, übrig bleibt eine einzige Skala:
 
-```bash
-python3 -c "import numpy; print(numpy.__version__)"   # muss durchlaufen
-chmod +x kish_screening.py                            # optional
-```
+$$\boxed{c = \beta\,\mathrm{std}(\Delta E)}$$
+
+Über die kumulantenerzeugende Funktion folgt exakt
+
+$$\log\frac{N_\text{eff}}{n} = 2K(-c)-K(-2c)
+= -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4 + O(c^5).$$
+
+Effektiver Entwicklungsparameter ist $2c$, nicht $c$ — $K$ wird auch bei $t=-2c$
+ausgewertet. Aus der Restabschätzung $(2c)^5/5! \le 0{,}05$ folgt die
+Gültigkeitsgrenze $C_\text{VALID} = \tfrac12(120\cdot0{,}05)^{1/5} \approx 0{,}7155$.
+
+Aufgelöst nach $c$ gibt das Effizienzkriterium die **Schranke** $c_\text{max}$:
+die kleinste positive Wurzel von
+
+$$c^2-\gamma_1c^3+\tfrac{7}{12}\gamma_2c^4 = -\ln R,$$
+
+gegen die Gauß-Variante $\sqrt{-\ln R}$, die die Form ignoriert. Rechtsschiefe
+erlaubt mehr $c$; die Gauß-Schranke ist dann konservativ, bei Linksschiefe kehrt
+sich das um.
+
+Entschieden wird über das Verhältnis der beiden:
+
+$$\boxed{\rho = \frac{c}{c_\text{max}}}\qquad
+\rho \le 1 \Rightarrow \text{PASS},\qquad \rho > 1 \Rightarrow \text{FAIL}$$
+
+$\rho$ ist die eigentliche Kennzahl der Ausgabe. Sie macht Modelle vergleichbar,
+deren $c_\text{max}$ wegen unterschiedlicher Schiefe verschieden ausfällt: $c$
+allein sagt nichts, solange die Schranke nicht danebensteht.
+
+### Die drei Größen und ihre Rollen
+
+| Größe | Rolle | Konvergenz |
+|---|---|---|
+| $c$ | Skala, Entscheidungsgröße | stabil ab $k\approx14$; $\mathrm{SE}/c=\sqrt{(\gamma_2+2)/4k}$ |
+| $\gamma_1,\gamma_2$ | Formkorrektur, bestimmen $c_\text{max}$ | $\gamma_1$ stabil erst ab $k\approx210$ |
+| $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | $\mathrm{SE}\propto n^{-1/4}$ |
+
+**$c$ allein ist kein Prädiktor.** Bei festem $c$ lässt sich $N_\text{eff}/n$
+zwischen 0,0007 und 0,99998 konstruieren. Verteilungsfrei gilt nur
+$c\to0 \Rightarrow N_\text{eff}/n\to1$.
+
+**$\hat k$ ist ein Gate, kein Qualitätsmaß.** $E[w^2]<\infty \iff \hat k<0{,}5$.
+Ist das verletzt, ist $K(-2c)$ undefiniert und die Herleitung nicht ungenau,
+sondern gegenstandslos. $\hat k$ ist nicht extrapolierbar — es gibt keine
+Funktion $\hat k(c)$.
 
 ---
 
-## 3. Eingabedaten
+## 3. Die drei $N_\text{eff}$-Zeilen
 
-Zwei Dateien: **DFT-Energien** und **ML-Energien**, gleiche Länge, **gleiche
-Reihenfolge** — Zeile $i$ beider Dateien muss denselben Frame beschreiben. Das
-prüft das Skript nicht; es kann nur die Länge vergleichen.
+| Zeile | Herkunft | Rolle |
+|---|---|---|
+| **exakt** | $(\sum w)^2/(n\sum w^2)$ über alle $n$ Gewichte | annahmefrei; **allein diese Zahl entscheidet** |
+| Reihe | $\exp(-c^2+\gamma_1c^3-\tfrac{7}{12}\gamma_2c^4)$ | Diagnose: trägt die Entwicklung bei diesem $c$? |
+| Gauss allein | $\exp(-c^2)$ | zeigt, wie viel die Formkorrektur ausmacht |
 
-| Endung | Format |
-|---|---|
-| `.npy` | numpy-Array, 1D |
-| `.npz` | Schlüssel `e_dft`, `e_mace`, `e_model`, `energies`, `energy`, `E` oder `e`; sonst `--key-dft` / `--key-ml` angeben |
-| `.txt` `.dat` | eine Zahl pro Zeile, `#` `!` `%` sind Kommentar |
-| `.csv` `.tsv` | dito, kommagetrennt |
+Weichen „exakt" und „Reihe" deutlich ab, hält die Entwicklung nicht mehr — dann
+ist $c_\text{max}$ unbrauchbar, der exakte Kish-Wert aber weiterhin gültig. Die
+Kumulantenreihe geht **nicht** in das gemeldete $N_\text{eff}/n$ ein; sie liefert
+über die Quartik nur die Schranke, gegen die der Monitor vergleicht.
 
-**Zwei Achsen** in einem npz (etwa ein Komitee mehrerer Modelle) werden als
-`(member, frame)` gelesen und über die Member gemittelt.
+Das gemeldete Restglied $(2c)^5/5! > 0{,}05$ und $c > C_\text{VALID}$ sind
+dieselbe Bedingung, nur anders geschrieben.
 
-**Einheiten:** Default eV. Mit `-u` umstellen — `meV`, `Ha`, `Ry`, `kcal/mol`,
-`kJ/mol`. Das ist keine Kosmetik: die Temperatur geht über $\beta = 1/k_BT$ ein,
-eine falsche Einheit verfälscht jedes Ergebnis.
+---
+
+## 4. Der sequenzielle Monitor
+
+Während die Gewichte nach und nach anfallen, wird an einem geometrischen Raster
+geprüft:
+
+$$\hat c(k) - \mathrm{SE}\big(\hat c(k)\big)
+\;>\;
+\hat c_\text{max}(k) + \mathrm{SE}\big(\hat c_\text{max}(k)\big)
+\;\Longrightarrow\; \text{FAIL, abbrechen}$$
+
+Drei Eigenschaften, die die Form erklären:
+
+**Einseitig.** Ein frühes PASS spart nichts — die Gewichte werden am Ende ohnehin
+vollständig gebraucht. Nur ein früh abgesichertes FAIL spart Rechenzeit. Damit
+bleibt genau eine Fehlerart: ein brauchbares Modell abbrechen.
+
+**Beide Seiten sind laufende Schätzungen.** $\hat c_\text{max}$ streut 30–60 %
+stärker als $\hat c$; ein Band nur um $\hat c$ ließe die größere der beiden
+Unsicherheiten weg.
+
+**Ein Standardfehler je Seite, kein Vorfaktor.** Bei zwei verglichenen Bändern
+wäre ein $q$ kein Niveau — nichtüberlappende Konfidenzbänder sind ein
+konservativer Test für eine Differenz, ein nominelles 5 % wäre effektiv etwa
+0,5 %. Statt einer Niveauaussage, die nicht hält, ist die Bandbreite eine
+**Konvention**.
+
+Alle Größen bei $k$ benutzen ausschließlich die ersten $k$ Punkte — der Monitor
+sieht die Zukunft nicht. Das Raster beginnt bei `first_frac·n` (Default 10 %),
+wächst mit Faktor 1,4, und `k_floor` (Default 50) schneidet alles darunter ab.
+Beides sind **getrennte** Parameter: für $n \ge 500$ liegt der Rasteranfang über
+50 und der Filter ist wirkungslos, darunter greift er.
+
+**Warum nicht früher geschaut wird.** Der späte Start ist der eigentliche Hebel,
+nicht die Rasterdichte: von $k\ge5$ auf $k\ge50$ fällt der Fehlalarm um Faktor 6,
+obwohl sich die Zahl der Blicke nur um 11 % verringert. Bei $k=5$ hat die Quartik
+in 43 % der Ziehungen im Gültigkeitsbereich gar keine Wurzel — die Schranke ist
+dort nicht ungenau, sondern nicht definiert.
+
+---
+
+## 5. Konventionen
+
+### ddof
+
+$c$ wird mit `ddof=1` gebildet, $\gamma_1$ und $\gamma_2$ mit `ddof=0`. Das ist
+keine Frage der Bibliothek — `ddof` ist eine statistische Wahl, und numpys
+eigener Default ist selbst `ddof=0`. Der Grund für die Mischung:
+
+* **$c$ mit `ddof=1`.** Ein Skalenparameter, den man erwartungstreu schätzen will
+  — Bessel-Korrektur, beim zweiten Moment exakt.
+* **$\gamma_1,\gamma_2$ als Plug-in.** Die Kumulantenentwicklung ist in
+  *Populations*kumulanten formuliert; die natürlichen Stichprobenanaloga sind
+  $m_3/m_2^{3/2}$ und $m_4/m_2^2-3$. Biaskorrigierte Varianten (Fishers $G_1$,
+  $G_2$) schätzen etwas anderes.
+
+Zur Gegenprobe von außen entsprechen $\gamma_1,\gamma_2$ exakt
+`scipy.stats.skew`/`kurtosis` mit `bias=True`; das Skript benutzt scipy nicht.
+Der Unterschied zwischen den Konventionen ist klein gegen $\mathrm{SE}(c)$ — bei
+$n=400$ 0,13 % gegen 3,86 % — aber nicht verschwindend: am ersten Checkpoint bei
+$k=50$ beträgt er 1 %, was an der Entscheidungslinie gelegentlich ausreicht.
+
+### Gewichte
+
+$w = e^{-\beta(\Delta E - \min\Delta E)}$. Der Abzug macht den größten Exponenten
+exakt null: Überlauf ist ausgeschlossen, möglich bleibt nur Unterlauf der ohnehin
+vernachlässigbaren Gewichte. $N_\text{eff}$ ist gegen einen konstanten Offset in
+$\Delta E$ invariant, das Ergebnis ändert sich also nicht.
+
+### Die zwei Standardfehler
+
+Sie kommen aus verschiedenen Quellen, und das ist gemessen, nicht gesetzt:
+
+| | Herkunft | Begründung |
+|---|---|---|
+| $\mathrm{SE}(\hat c)$ | analytisch, $\hat c\sqrt{(\hat\gamma_2+2)/4k}$ | trifft den Bootstrap derselben Sequenz auf 3 % |
+| $\mathrm{SE}(\hat c_\text{max})$ | gebootstrappt | die analoge Delta-Methode liegt im Mittel 60 % zu hoch, bei $k=50$ Ausreißer bis Faktor 35 — $f'(c_\text{max})$ steht im Nenner und geht bei verrauschtem $\hat\gamma_1$ gegen null |
+
+Der Bootstrap ist über `--seed` reproduzierbar. Die geschätzte Bandbreite streut
+selbst um $1/\sqrt{2B}$ — bei $B=200$ sind das 5 %. Wer knapp an der
+Entscheidungsgrenze liegt, nimmt `-B 1000`.
+
+### Eingabekonventionen
 
 **Energien pro Zelle, nicht pro Atom.** Das Kriterium hängt an der Streuung der
-*Gesamtenergie* des simulierten Systems.
+*Gesamtenergie*; wegen $c\propto\sqrt N$ liefern Energien pro Atom stillschweigend
+ein falsches $c$. Das Skript kann das nicht bemerken.
+
+**Reihenfolge = Anfallreihenfolge.** Der Monitor liest die Zeilen als den Strom,
+in dem die Punkte entstehen.
+
+**Einheiten** über `-u` (Default eV), **Temperatur** über `-T`. Beide gehen über
+$\beta = 1/k_BT$ direkt in $c$ ein.
 
 ---
 
-## 4. Aufruf
+## 6. Grenzen
+
+**Die Grauzone um $\rho = 1$ lässt sich nicht wegkalibrieren.** Zur Erinnerung:
+$\rho = c/c_\text{max}$, die Grenze liegt bei 1. $\rho=0{,}99$ und $\rho=1{,}01$
+unterscheiden sich in $N_\text{eff}/n$ um 0,003. Jede Regel, die $\rho=1{,}05$
+erkennt, muss bei $\rho=0{,}95$ gelegentlich feuern — Stetigkeit der
+Gütefunktion, kein Umsetzungsfehler.
+
+| Regime | $\rho$ | Verhalten | belastbar? |
+|---|---|---|---|
+| sicher PASS | $\lesssim0{,}90$ | Fehlalarm $\le0{,}2$ % | **ja** |
+| Grauzone | $0{,}95\dots1{,}2$ | Fehlalarm bis 11 %, Erkennung erst 76 % bei $\rho=1{,}1$ | **nein** |
+| sicher FAIL | $\gtrsim1{,}2$ | Erkennung 99 %, Abbruch beim ersten Checkpoint | **ja** |
+
+**Korrelierte Daten machen den Monitor zu selbstsicher.** Die Standardfehler
+setzen unabhängige Punkte voraus; $\mathrm{SE}(c)$ kennt keine
+Autokorrelationszeit. Auf einem AR(1)-Strom mit $\rho_1 = 0{,}38$ gegen
+iid-Ziehungen aus derselben Randverteilung:
+
+| $\rho$ (wahr PASS) | zusammenhängende Fenster | iid |
+|---|---|---|
+| 0,90 | 0 % | 0 % |
+| 0,95 | **6 %** | 1 % |
+
+Aus $\tau = (1+\rho_1)/(1-\rho_1) \approx 2{,}2$ folgt $\sqrt\tau \approx 1{,}5$:
+die Bänder müssten rund 50 % breiter sein. Eine Korrektur ist **nicht** eingebaut.
+Bei dicht aufeinanderfolgenden Frames ausdünnen oder das Ergebnis als optimistisch
+lesen.
+
+**$\hat k$ ist stark verrauscht.** Der Standardfehler fällt nur wie $n^{-1/4}$ und
+liegt bei $n=500$ bei etwa 0,15 — ein einzelner Wert kann die 0,5-Schwelle nicht
+sicher entscheiden. Das Skript rechnet $\hat k$ deshalb immer auf dem **vollen**
+übergebenen Satz, nie auf einem Präfix. In einem Produktionslauf gehört das Gate
+auf den vollständigen Testsatz, nicht auf die laufende Sequenz.
+
+**$N_\text{eff}$ misst Ungleichheit, nicht Abdeckung.** Gleichmäßige Gewichte
+schließen nicht aus, dass eine wichtige Region des Konfigurationsraums nie besucht
+wurde.
+
+**Reweighting korrigiert auf die DFT-Referenz, nicht auf die Realität.** Fehler
+des Funktionals bleiben unangetastet.
+
+---
+
+## 7. Aufruf
 
 ```bash
-python3 kish_screening.py DFT_DATEI ML_DATEI [Optionen]
+python3 kish_screening.py DFT_DATEI [ML_DATEI] [Optionen]
 ```
+
+Welcher Modus greift, entscheidet allein die Zahl der Positionsargumente. Mit
+**einer** Datei muss eine npz mit `e_dft` und `e_mace`/`energies` vorliegen
+(bei `energies` der Form $(M,F)$ wird über Achse 0 gemittelt); `--key-*` wirkt
+dann nicht. Mit **zwei** Dateien werden `.npy .npz .txt .dat .csv .tsv` gelesen,
+Schlüssel über `--key-dft` / `--key-ml`.
 
 | Option | Bedeutung | Default |
 |---|---|---|
-| `-R`, `--target` | gefordertes $N_\text{eff}/n$, in $(0,1)$ | 0.8 |
-| `-T`, `--temperature` | Temperatur in Kelvin | 292 |
-| `-u`, `--units` | Einheit der Eingabeenergien | eV |
-| `--key-dft`, `--key-ml` | npz-Schlüssel | automatisch |
-| `-k`, `--k-floor` | erster Blick des Monitors | max(50, n/10) |
-| `-b`, `--band` | Bandbreite in Standardfehlern je Seite | 1.0 |
-| `-B`, `--bootstrap` | Resamples je Checkpoint | 200 |
+| `-R` | gefordertes $N_\text{eff}/n$ | 0.8 |
+| `-T` | Temperatur in Kelvin | 292 |
+| `-u` | Einheit der Eingabeenergien | eV |
+| `-k` | Checkpoints unterhalb $k$ verwerfen | 50 |
+| `--first-frac` | Rasteranfang als Anteil von $n$ | 0.10 |
+| `-b` | Bandbreite in Standardfehlern je Seite | 1.0 |
+| `-B` | Bootstrap-Resamples je Checkpoint | 200 |
 | `--seed` | Zufallsstartwert | 0 |
-| `--no-monitor` | nur Kennzahlen, keine Simulation | |
-| `--steps` | Tabelle aller Checkpoints | |
-| `--json` | Ergebnis als JSON auf stdout | |
-| `-q`, `--quiet` | nur `PASS` / `FAIL` / `UNKLAR` | |
 
 ---
 
-## 5. Exit-Codes
+## 8. Ergebnisse exportieren
+
+Vier Ausgabeformen, alle auf **stdout**; Warnungen gehen getrennt auf **stderr**
+und lassen sich mit `2>/dev/null` unterdrücken, ohne das Ergebnis zu verlieren.
+
+| Form | Aufruf | Inhalt |
+|---|---|---|
+| Bericht | (Default) | formatierte Kennzahlen und Urteil |
+| + Checkpoints | `--steps` | zusätzlich die Tabelle aller Blicke des Monitors |
+| Kurzform | `-q` | eine Zeile: `PASS`, `FAIL` oder `UNKLAR` |
+| Maschinenlesbar | `--json` | vollständige Struktur, siehe unten |
+| ohne Monitor | `--no-monitor` | nur die Kennzahlen des vollen Satzes |
+
+### JSON-Struktur
+
+```
+gesamt/
+  n, T, beta, R, units, band          Eingabeparameter
+  sigma, c, gamma1, gamma2            Momente von dE
+  c_max, c_max_gauss, rho             Schranke und Kennzahl
+  neff_ratio                          exakter Kish-Wert  <- entscheidet
+  neff_ratio_reihe, neff_ratio_gauss  Vergleichswerte (Diagnose)
+  khat, r5                            Gate und Restglied
+  k_floor, first_frac                 Rasterparameter
+  diagnose[]                          Meldungen zur Quartik
+version                               "1.1"
+hinweise[], warnungen[]               Klartextmeldungen
+monitor/
+  gefeuert                            true/false
+  k_stop                              Abbruchpunkt oder null
+  gespart                             Anteil eingesparter DFT-Punkte
+  checkpoints[]                       das benutzte Raster
+  schritte[]                          je Checkpoint: k, c, gamma1, gamma2,
+                                      c_max, se_c, se_c_max, abstand, band, feuert
+urteil                                "PASS" | "FAIL" | "UNKLAR"
+begruendung                           Klartext
+```
+
+`schritte[]` enthält $\mathrm{SE}(\hat c)$ und $\mathrm{SE}(\hat c_\text{max})$
+**getrennt** — im Bericht steht nur ihre Summe unter „Band". Für die Frage, ob
+die Schranke oder die Skala die Unsicherheit dominiert, ist die Aufschlüsselung
+nötig.
+
+### Exit-Codes
 
 | Code | Bedeutung |
 |---|---|
-| **0** | **PASS** — Kriterium erfüllt, Reweighting trägt |
-| **1** | **FAIL** — Abbruchbedingung erfüllt, Rechnung einstellen |
-| **2** | Aufrufsfehler: Argument unzulässig, Datei fehlt, Format unbekannt |
-| **3** | Datenfehler: ungleiche Länge, zu wenige Punkte, NaN, konstantes $\Delta E$ |
-| **4** | **UNKLAR** — weder PASS noch FAIL; die Voraussetzungen der Methode sind verletzt (siehe §7) |
+| 0 | PASS |
+| 1 | FAIL |
+| 2 | Aufrufsfehler |
+| 3 | Datenfehler |
+| 4 | UNKLAR — $\hat k \ge 0{,}5$, $c \ge C_\text{VALID}$, oder die Reihe behauptet an $c_\text{max}$ selbst $N_\text{eff} > n$ |
 
-Meldungen und Warnungen gehen auf **stderr**, das Ergebnis auf **stdout**. Beides
-lässt sich getrennt umleiten.
+UNKLAR wird nur gemeldet, wenn der exakte Kish-Wert nicht ohnehin FAIL sagt — ein
+FAIL aus der annahmefreien Zahl steht unabhängig von jeder Reihenentwicklung.
 
-### Verwendung in Shell-Skripten
-
-```bash
-# Einfachster Fall: abbrechen, wenn das Modell nicht taugt
-python3 kish_screening.py e_dft.npy e_ml.npy || {
-    echo "Reweighting traegt nicht — MD stoppen" >&2
-    exit 1
-}
-
-# Alle Faelle unterscheiden
-python3 kish_screening.py e_dft.npy e_ml.npy -q
-case $? in
-    0) echo "weiter" ;;
-    1) echo "abbrechen" ;;
-    4) echo "nicht belastbar — von Hand ansehen" ;;
-    *) echo "Aufruf- oder Datenfehler" ;;
-esac
-
-# Als Bedingung, ohne Ausgabe
-if python3 kish_screening.py a.npy b.npy -q >/dev/null 2>&1; then
-    echo "traegt"
-fi
-
-# Kennzahl weiterreichen
-python3 kish_screening.py a.npy b.npy --json --no-monitor \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['gesamt']['neff_ratio'])"
-
-# Mehrere Modelle vergleichen
-for m in modell_*.npy; do
-    printf '%-24s %s\n' "$m" "$(python3 kish_screening.py dft.npy "$m" -q --no-monitor 2>/dev/null)"
-done
-```
-
----
-
-## 6. Die Ausgabe lesen
-
-```
-  std(dE)             8.220 meV
-  c = beta*std(dE)    0.3267
-  Schiefe   gamma1    +0.5027
-  Kurtosis  gamma2    +0.4071
-
-  c_max (Gauss)       0.4724
-  c_max (schief)      0.5279   <- verwendet
-  rho = c/c_max       0.619
-
-  N_eff/n (exakt)     0.9125   >= R = 0.8
-  khat (Tail-Index)   +0.068   Gate bestanden
-  Restglied (2c)^5/5! 0.0010   ok
-```
-
-**$c = \beta\,\mathrm{std}(\Delta E)$** ist die Entscheidungsgröße — die Breite
-der Fehlerverteilung in Einheiten der thermischen Energie. Sie allein sagt noch
-nichts: bei festem $c$ lässt sich $N_\text{eff}/n$ zwischen 0,0007 und 0,99998
-konstruieren. Es braucht die Form dazu.
-
-**$\gamma_1$, $\gamma_2$** sind Schiefe und Exzess-Kurtosis von $\Delta E$. Sie
-sind nicht Beiwerk, sondern die Taylorkoeffizienten der Entwicklung
-
-$$\log\frac{N_\text{eff}}{n} = -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4 + O(c^5).$$
-
-**$c_\text{max}$** ist die Schranke, ab der das Ziel $R$ verfehlt wird: die
-kleinste positive Wurzel von $c^2-\gamma_1c^3+\tfrac{7}{12}\gamma_2c^4 = -\ln R$.
-Die Gauß-Variante $\sqrt{-\ln R}$ steht zum Vergleich daneben — sie ignoriert die
-Form und liegt bei Rechtsschiefe zu tief. Verwendet wird immer die
-schiefe-korrigierte.
-
-**$\rho = c/c_\text{max}$** ist die eigentliche Kennzahl. $\rho\le1$ heißt PASS.
-Unterhalb 0,9 und oberhalb 1,2 ist die Aussage belastbar, dazwischen liegt eine
-Grauzone (siehe §7).
-
-**$N_\text{eff}/n$** ist der exakte Kish-Wert, ohne jede Näherung — die
-verlässlichste Zahl der ganzen Ausgabe.
-
-**$\hat k$** ist der Pareto-Tail-Index. Er ist kein Qualitätsmaß, sondern ein
-**Gate**: nur für $\hat k < 0{,}5$ existiert $E[w^2]$ überhaupt, und nur dann hat
-$N_\text{eff}$ einen Grenzwert, gegen den es konvergieren könnte.
-
-**Restglied** $(2c)^5/5!$ schätzt den Abbruchfehler der Reihe. Über 0,05 trägt
-sie nicht mehr — dann ist $c_\text{max}$ unbrauchbar, der exakte Kish-Wert aber
-weiterhin gültig.
-
-### Der Monitor
-
-```
-  Regel: c(k) - 1*SE(c) > c_max(k) + 1*SE(c_max)
-  Checkpoints: [50, 70, 98, 137, 192, 269, 377, 400]
-
-        k        c    c_max   Abstand     Band    Urteil
-       50   1.1223   0.4892   +0.6332   0.1491      FAIL
-
-  -> Abbruch bei k = 50 von 400
-     88 % der DFT-Punkte waeren gespart worden.
-```
-
-Der Monitor geht die ersten $k$ Punkte durch — **in der Reihenfolge, in der sie
-in der Datei stehen** — und prüft an einem geometrischen Raster, ob die Bänder um
-$\hat c$ und $\hat c_\text{max}$ sich getrennt haben. Erst dann wird FAIL
-behauptet.
-
-Die Regel ist **einseitig**: PASS wird nie früh behauptet. Ein frühes PASS spart
-nichts, weil die Gewichte am Ende ohnehin vollständig gebraucht werden — nur ein
-frühes FAIL spart Rechenzeit. Damit gibt es genau eine Fehlerart: ein brauchbares
-Modell abbrechen.
-
-Alle Größen bei $k$ benutzen ausschließlich die ersten $k$ Punkte. Der Monitor
-sieht die Zukunft nicht.
-
----
-
-## 7. Grenzen — was das Skript nicht kann
-
-**Die Reihenfolge muss etwas bedeuten.** Der Monitor simuliert einen Lauf, der
-Punkt für Punkt anfällt. Sind die Zeilen in zufälliger Reihenfolge, ist der
-Abbruchpunkt eine Zufallszahl. Bei Daten aus einer MD-Trajektorie ist die
-Reihenfolge natürlich gegeben.
-
-**Die Grauzone um $\rho = 1$ lässt sich nicht wegrechnen.** $\rho=0{,}99$ und
-$\rho=1{,}01$ unterscheiden sich in $N_\text{eff}/n$ um 0,003 — mit endlich
-vielen Punkten nicht trennbar. Jede Regel, die $\rho=1{,}05$ erkennt, muss bei
-$\rho=0{,}95$ gelegentlich fälschlich feuern. Zwischen etwa 0,95 und 1,2 ist die
-Aussage deshalb nicht belastbar; das ist Stetigkeit der Gütefunktion, kein
-Umsetzungsfehler.
-
-**Korrelierte Daten machen den Monitor zu selbstsicher.** Die Standardfehler
-setzen unabhängige Punkte voraus. Ein realer MD-Strom ist autokorreliert; bei
-einer Lag-1-Korrelation von 0,4 wären die Bänder rund 50 % breiter, als das
-Skript annimmt. Wenn die Frames dicht aufeinanderfolgen: ausdünnen, oder das
-Ergebnis als optimistisch lesen.
-
-**$N_\text{eff}$ misst Ungleichheit, nicht Abdeckung.** Ein Modell kann perfekt
-gleichmäßige Gewichte haben und trotzdem eine wichtige Region des
-Konfigurationsraums nie besucht haben. Kein Screening kann das ausschließen.
-
-**Das Reweighting korrigiert auf die DFT-Referenz, nicht auf die Realität.**
-Fehler des Funktionals bleiben unangetastet.
-
-**Bei `UNKLAR` (Exit 4)** ist eine Voraussetzung verletzt — meist $\hat k \ge
-0{,}5$. Dann ist der ausgegebene $N_\text{eff}$-Wert eine Stichprobenzahl ohne
-Populationsgrenzwert. Das ist kein Programmfehler, sondern eine Eigenschaft der
-Daten: die Gewichtsverteilung hat einen so schweren Schwanz, dass ein einzelner
-Frame beliebig dominant werden kann.
-
-Ein Hinweis zu $\hat k$: der Schätzer ist stark verrauscht, sein Standardfehler
-fällt nur wie $n^{-1/4}$. Bei wenigen hundert Punkten kann ein einzelner Wert die
-0,5-Schwelle nicht sicher entscheiden. Deshalb rechnet das Skript $\hat k$ immer
-auf dem **vollen** Satz, nie auf einem Präfix.
-
----
-
-## 8. Konventionen und Reproduzierbarkeit
-
-$c$ wird mit `ddof=1` gebildet (erwartungstreue Varianz), $\gamma_1$ und
-$\gamma_2$ mit `ddof=0` (Plug-in, entspricht `scipy.stats.skew`/`kurtosis` mit
-`bias=True`). Das ist die Konvention der Referenzimplementierung. Der Unterschied
-zwischen den Konventionen liegt bei $n>100$ unter 0,5 % und damit weit unter dem
-Standardfehler von $c$ selbst.
-
-Die Gewichte werden als $w = e^{-\beta(\Delta E - \min\Delta E)}$ gebildet. Der
-Abzug macht den größten Exponenten exakt null: Überlauf ist damit ausgeschlossen,
-möglich bleibt nur Unterlauf der ohnehin vernachlässigbaren Gewichte. Da
-$N_\text{eff}$ gegen einen konstanten Offset in $\Delta E$ invariant ist, ändert
-das am Ergebnis nichts.
-
-Der Bootstrap für $\mathrm{SE}(c_\text{max})$ ist über `--seed` reproduzierbar.
-Bei $B=200$ streut die geschätzte Bandbreite selbst um etwa 5 %; wer knapp an der
-Entscheidungsgrenze liegt, sollte `-B 1000` nehmen.
-
-Warum $\mathrm{SE}(c_\text{max})$ gebootstrappt und $\mathrm{SE}(c)$ analytisch
-gerechnet wird: für $c$ trifft die Delta-Methode
-$\mathrm{SE}(c) = c\sqrt{(\gamma_2+2)/4k}$ den Bootstrap derselben Stichprobe auf
-3 %. Für $c_\text{max}$ versagt die analoge Rechnung — dort steht $f'(c_\text{max})$
-im Nenner und geht bei verrauschtem $\hat\gamma_1$ gegen null.
-
----
-
-## 9. Ein vollständiges Beispiel
+### Beispiele
 
 ```bash
-$ python3 kish_screening.py dft.npy mace_l0.npy --steps
-==============================================================
-  KISH-SCREENING — traegt das Reweighting?
-==============================================================
-  Punkte n            400
-  Temperatur          292.0 K   (beta = 39.742 1/eV)
-  Ziel R              0.8
+# Kennzahl in eine Variable
+rho=$(python3 kish_screening.py daten.npz --json --no-monitor 2>/dev/null \
+      | python3 -c "import json,sys; print(json.load(sys.stdin)['gesamt']['rho'])")
 
-  std(dE)             31.142 meV
-  c = beta*std(dE)    1.2376
-  Schiefe   gamma1    +0.2481
-  Kurtosis  gamma2    +0.1098
+# Verlauf der Bänder über die Checkpoints als CSV
+python3 kish_screening.py daten.npz --json 2>/dev/null | python3 -c "
+import json,sys
+print('k,c,c_max,se_c,se_c_max,feuert')
+for s in json.load(sys.stdin)['monitor']['schritte']:
+    print(f\"{s['k']},{s['c']:.6f},{s['c_max']:.6f},{s['se_c']:.6f},{s['se_c_max']:.6f},{s['feuert']}\")
+" > verlauf.csv
 
-  c_max (Gauss)       0.4724
-  c_max (schief)      0.5002   <- verwendet
-  rho = c/c_max       2.474
-
-  N_eff/n (exakt)     0.3606   < R = 0.8
-  khat (Tail-Index)   +0.050   Gate bestanden
-  Restglied (2c)^5/5! 0.7743   Reihe unbrauchbar
-
---------------------------------------------------------------
-  SEQUENZIELLER MONITOR
---------------------------------------------------------------
-        k        c    c_max   Abstand     Band    Urteil
-       50   1.1223   0.4892   +0.6332   0.1491      FAIL
-
-  -> Abbruch bei k = 50 von 400
-     88 % der DFT-Punkte waeren gespart worden.
-
-==============================================================
-  URTEIL: FAIL
-  N_eff/n = 0.3606 < R = 0.8; Monitor feuert bei k = 50
-==============================================================
-
-$ echo $?
-1
+# Als Bedingung im Workflow
+python3 kish_screening.py daten.npz -q >/dev/null 2>&1 || exit 1
 ```
-
-Zu lesen als: das Modell verfehlt das Ziel deutlich ($\rho = 2{,}5$), und der
-Monitor hätte das schon nach 50 von 400 DFT-Rechnungen gewusst. Die Warnung zum
-Restglied ist konsistent — bei $c=1{,}24$ ist die Reihe wertlos, weshalb
-$c_\text{max}$ hier nur ein grober Anhalt ist. Das FAIL steht trotzdem, denn es
-stützt sich auf den exakten Kish-Wert 0,3606, der ohne jede Reihenentwicklung
-auskommt.
 
 ---
 
-## 10. Methodik
+## 9. Methodik
 
 Der Formalismus ist die auf Modellfehler übertragene Form eines etablierten
 Kriteriums: $\beta\sigma_{\Delta U}$ ist in der Freie-Energie-Störungstheorie
 seit Zwanzig die Kenngröße für Konvergenz, mit der Faustregel
 $\beta\sigma \lesssim 1$. Wu & Kofke (JCP 123, 054103 und 084109, 2005) bauen
 darauf ein Bias-Maß über den Phasenraum-Überlapp, allerdings unter Gauß-Annahme —
-die $\gamma_1c^3$-Korrektur schließt genau diese Lücke.
+die $\gamma_1c^3$-Korrektur schließt genau diese Lücke. Kofke (JCP 117, 6911,
+2002) leitet strukturell dieselbe Bedingung für die Akzeptanzrate im Replica
+Exchange her.
+
+Der $\hat k$-Schätzer folgt Zhang & Stephens (2009) in der Form, die Vehtari
+et al. (JMLR 25, 2024) für PSIS benutzen.
 
 Anwendungskontext: Hilpert & Kresse, *Accurate thermophysical properties of water
 using machine-learned potentials*, J. Chem. Phys. 164, 194504 (2026).
 
-Der $\hat k$-Schätzer folgt Zhang & Stephens (2009) in der Form, die Vehtari
-et al. (JMLR 25, 2024) für PSIS benutzen.
+Die Kernfunktionen sind gegen `uq_mace.screening` / `uq_mace.reweighting`
+geprüft: bitgleich bei `momente`, `se_c`, `gewichte`, `neff_ratio`, `psis_khat`,
+`log_neff_ratio`, `diagnose`; `cmax_skew` gegen die Newton-Fassung
+$4{,}7\cdot10^{-15}$ auf 3721 Parameterpaaren; 90 von 90 Monitorläufen
+entscheidungsgleich.
