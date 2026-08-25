@@ -5,33 +5,47 @@ kish_screening.py — lohnt sich das Reweighting?
 
 Entscheidet fuer einen Satz DFT- und ML-Energien, ob thermodynamisches
 Reweighting statistisch tragen wird, und simuliert den sequenziellen Monitor:
-nach wie vielen Punkten haette man den Lauf abbrechen koennen?
+nach wie vielen Punkten kann man den Lauf abbrechen?
 
     python3 kish_screening.py DFT_DATEI ML_DATEI [Optionen]
 
 Exit-Codes (fuer die Benutzung in Shell-Skripten):
 
-    0   PASS  — Kriterium erfuellt, Reweighting traegt
+    0   PASS  — Kriterium erfuellt, Reweighting traegt (im Live-Modus auch:
+        WEITER, kein FAIL bisher, Kampagne fortsetzen)
     1   FAIL  — Abbruchbedingung erfuellt, Rechnung einstellen
     2   Aufrufsfehler (Argumente, Datei fehlt, unbekanntes Format)
     3   Datenfehler (ungleiche Laenge, zu wenige Punkte, NaN)
     4   Ergebnis nicht belastbar (Momentbedingung verletzt oder Reihe
         ausserhalb ihres Gueltigkeitsbereichs) — weder PASS noch FAIL
 
-Beispiel:
+Beispiel (Batch, fertiger Datensatz):
 
-    Zwei Dateien input: 
-    
+    Zwei Dateien input:
+
     python3 kish_screening.py e_dft.npy e_mace.npy -R 0.8 || {
         echo "Reweighting traegt nicht — MD abbrechen" >&2
         exit 1
     }
 
-    Ein Dateien Input: 
+    Ein Dateien Input:
     python3 kish_screening.py cache/single_mace-L0-01_testfull_n5000.npz \ -R 0.8 -T 292 --steps
     echo "Exit-Code: $?"
 
-Nur numpy notwendig. 
+Beispiel (Live, Einbettung in eine laufende MD/DFT-Kampagne mit geplant 5000
+Punkten): bei jedem neu hinzugekommenen DFT-Batch neu aufrufen, mit den bis
+dahin gesammelten Punkten. Ein einzelner Aufruf prueft NUR den gerade
+faelligen Checkpoint (kein Raster-Walk) und gibt WEITER/FAIL zurueck; sobald
+alle 5000 Punkte vorliegen, liefert derselbe Aufruf automatisch die volle
+Zertifizierung (khat, exaktes N_eff/n, PASS/FAIL/UNKLAR):
+
+    python3 kish_screening.py e_dft_bisher.npy e_mace_bisher.npy \
+        -R 0.8 -T 292 -N 5000 --live -q || {
+        echo "FAIL — MD/DFT-Kampagne abbrechen" >&2
+        exit 1
+    }
+
+Nur numpy notwendig.
 """
 
 from __future__ import annotations
@@ -171,8 +185,15 @@ def lade_paar(pfad: str) -> tuple[np.ndarray, np.ndarray]:
     return e_dft.ravel(), e_ml.ravel()
 
 
-def pruefe_daten(e_dft: np.ndarray, e_ml: np.ndarray, k_floor: int) -> np.ndarray:
-    """Beide Arrays auf Vertraeglichkeit pruefen, dE zurueckgeben."""
+def pruefe_daten(e_dft: np.ndarray, e_ml: np.ndarray, k_floor: int,
+                 n_plan: int | None = None) -> np.ndarray:
+    """Beide Arrays auf Vertraeglichkeit pruefen, dE zurueckgeben.
+
+    n_plan: geplantes Kampagnenbudget (Live-Modus). Die Checkpoint-Existenz
+    wird dann gegen n_plan geprueft, nicht gegen den aktuell vorliegenden
+    Stand e_dft.size — sonst schlaegt die Pruefung bei noch wenigen Live-
+    Punkten spuriell fehl, obwohl die Kampagne insgesamt genug Punkte plant.
+    """
     if e_dft.size != e_ml.size:
         raise Abbruch(EXIT_DATA,
                       f"ungleiche Laenge: DFT hat {e_dft.size}, ML hat {e_ml.size} Werte. "
@@ -186,28 +207,23 @@ def pruefe_daten(e_dft: np.ndarray, e_ml: np.ndarray, k_floor: int) -> np.ndarra
         raise Abbruch(EXIT_DATA,
                       f"{schlecht.sum()} nicht-endliche Werte in dE "
                       f"(Positionen {np.where(schlecht)[0][:5].tolist()}...)")
-    ck = checkpoints_fuer(dE.size, k_floor)
+    grenze = dE.size if n_plan is None else n_plan
+    ck = checkpoints_fuer(grenze, k_floor)
     if not ck:
         raise Abbruch(EXIT_DATA,
-                      f"nur {dE.size} Punkte — im Raster liegt kein Checkpoint "
-                      f"bei k >= {k_floor}. Mehr Punkte rechnen oder --k-floor "
-                      f"senken (Referenzwert {K_FLOOR}).")
+                      f"nur {grenze} Punkte (geplant) — im Raster liegt kein "
+                      f"Checkpoint bei k >= {k_floor}. Mehr Punkte planen oder "
+                      f"--k-floor senken (Referenzwert {K_FLOOR}).")
     if np.std(dE) == 0.0:
         raise Abbruch(EXIT_DATA, "dE ist konstant — die Modelle sind identisch?")
     return dE
 
 
 # --------------------------------------------------------------------------
-# Kerngroessen
+# Kerngrößen
 # --------------------------------------------------------------------------
 def momente(dE: np.ndarray, beta: float):
-    """(c, gamma1, gamma2).
-
-    c mit ddof=1 (erwartungstreue Varianz), Form mit ddof=0 (Plug-in, = scipy
-    skew/kurtosis mit bias=True). Das ist die Konvention der Referenz-
-    implementierung; der Unterschied liegt bei n>100 unter 0.5 % und weit
-    unter dem Standardfehler.
-    """
+    """(c, gamma1, gamma2)."""
     n = dE.size
     u = dE - dE.mean()
     m2 = (u ** 2).mean()
@@ -271,10 +287,12 @@ def diagnose(R: float, g1: float, g2: float, rem_tol: float = R5_TOL) -> list[st
       ist f streng monoton auf (0, inf) und die Wurzel eindeutig. Sonst kann es
       weitere geben -- cmax_skew nimmt die kleinste, was richtig ist, aber die
       Situation sollte sichtbar sein.
-    * **N_eff <= n.** Cauchy-Schwarz erzwingt log(N_eff/n) <= 0. Die abgebrochene
-      Reihe verletzt das ab der kleinsten positiven Wurzel von
-      -(7/12) g2 c^2 + g1 c - 1 = 0; existiert die (d.h. g1^2 >= (7/3) g2) und
-      liegt c_max jenseits davon, ist der Wert bedeutungslos.
+    * **N_eff <= n.** Cauchy-Schwarz erzwingt log(N_eff/n) <= 0. Geprueft wird
+      das direkt an c_max ueber log_neff_ratio -- nicht ueber die Nullstellen
+      von dessen Ableitung, denn deren ungueltige Zone ist bei g2 > 0 ein
+      BEGRENZTES Intervall zwischen zwei Nullstellen: jenseits der groesseren
+      ist der Wert wieder gueltig. Ein Test nur gegen die kleinere Nullstelle
+      (frueherer Ansatz) erzeugt dort falsch-positive Meldungen.
     * **A2-Restglied.** (2 c_max)^5 / 5! <= rem_tol.
 
     Die Pruefungen sitzen an c_max, nicht am gemessenen c -- gefragt ist, ob die
@@ -288,17 +306,10 @@ def diagnose(R: float, g1: float, g2: float, rem_tol: float = R5_TOL) -> list[st
                    f"(56/27) g2={(56/27)*g2:.4g}) - weitere positive Wurzeln "
                    f"moeglich; kleinste gewaehlt")
 
-    if g1 ** 2 >= (7 / 3) * g2:
-        a = -(7 / 12) * g2
-        if abs(a) < 1e-300:
-            c_abs = 1.0 / g1 if g1 > 0 else np.inf
-        else:
-            sq = np.sqrt(g1 ** 2 - (7 / 3) * g2)
-            cand = [x for x in ((-g1 + sq) / (2 * a), (-g1 - sq) / (2 * a)) if x > 0]
-            c_abs = min(cand) if cand else np.inf
-        if c >= c_abs:
-            out.append(f"c_max={c:.4f} liegt jenseits der Gueltigkeitsgrenze "
-                       f"c_abs={c_abs:.4f}, wo die Reihe N_eff > n behauptet")
+    lnr = log_neff_ratio(c, g1, g2)
+    if lnr > 0.0:
+        out.append(f"c_max={c:.4f} verletzt N_eff <= n (log(N_eff/n)={lnr:.4g} > 0, "
+                   f"Cauchy-Schwarz) - der Wert ist dort bedeutungslos")
 
     rem = (2.0 * c) ** 5 / 120.0
     if rem > rem_tol:
@@ -419,12 +430,32 @@ def se_cmax_boot(dE_prefix: np.ndarray, R: float, beta: float,
     return float(werte.std())
 
 
+def monitor_schritt(prefix: np.ndarray, R: float, beta: float, band: float,
+                    B: int, rng: np.random.Generator) -> dict:
+    """Ein einzelner Checkpoint-Schritt: alle Kenngroessen bei k = prefix.size.
+
+    Regel:  c(k) - band*SE(c)  >  c_max(k) + band*SE(c_max)   =>  FAIL
+
+    Von monitor() ausgelagert, damit derselbe Schritt auch einzeln (Live-
+    Modus, ein Aufruf = ein Checkpoint) ausgefuehrt werden kann, ohne die
+    Historie erneut durchzuwalzen.
+    """
+    k = prefix.size
+    c, g1, g2 = momente(prefix, beta)
+    cm = cmax_skew(R, g1, g2, warn=False)
+    s_c = se_c(c, g2, k)
+    s_cm = se_cmax_boot(prefix, R, beta, B, rng)
+    feuert = (c - band * s_c) > (cm + band * s_cm)
+    return {"k": k, "c": c, "gamma1": g1, "gamma2": g2,
+            "c_max": cm, "se_c": s_c, "se_c_max": s_cm,
+            "abstand": c - cm, "band": band * (s_c + s_cm),
+            "feuert": bool(feuert)}
+
+
 def monitor(dE: np.ndarray, R: float, beta: float, k_floor: int,
             band: float, B: int, rng: np.random.Generator,
             first_frac: float = FIRST_FRAC) -> dict:
     """Sequenzieller FAIL-only-Monitor ueber das Checkpoint-Raster.
-
-    Regel:  c(k) - band*SE(c)  >  c_max(k) + band*SE(c_max)   =>  FAIL
 
     Einseitig: ein frueher PASS spart nichts, die Gewichte werden am Ende
     ohnehin vollstaendig gebraucht. Nur ein frueher FAIL spart Rechenzeit.
@@ -436,21 +467,16 @@ def monitor(dE: np.ndarray, R: float, beta: float, k_floor: int,
     dort laufen viele Sequenzen zeilenweise parallel, und die Schranke kommt
     aus cmax_skew_vec (Newton) statt aus cmax_skew (numpy.roots) — auf einem
     Gitter aus 3721 Parameterpaaren stimmen beide auf 4.7e-15 ueberein.
+
+    Retrospektive Simulation ueber ein bereits fertiges dE: fuer den
+    Live-Einzelschritt an einem wachsenden dE siehe monitor_schritt().
     """
     n = dE.size
     schritte = []
     for k in checkpoints_fuer(n, k_floor, first_frac):
-        prefix = dE[:k]
-        c, g1, g2 = momente(prefix, beta)
-        cm = cmax_skew(R, g1, g2, warn=False)
-        s_c = se_c(c, g2, k)
-        s_cm = se_cmax_boot(prefix, R, beta, B, rng)
-        feuert = (c - band * s_c) > (cm + band * s_cm)
-        schritte.append({"k": k, "c": c, "gamma1": g1, "gamma2": g2,
-                         "c_max": cm, "se_c": s_c, "se_c_max": s_cm,
-                         "abstand": c - cm, "band": band * (s_c + s_cm),
-                         "feuert": bool(feuert)})
-        if feuert:
+        schritt = monitor_schritt(dE[:k], R, beta, band, B, rng)
+        schritte.append(schritt)
+        if schritt["feuert"]:
             return {"gefeuert": True, "k_stop": k,
                     "gespart": 1.0 - k / n, "schritte": schritte}
     return {"gefeuert": False, "k_stop": None, "gespart": 0.0, "schritte": schritte}
@@ -459,7 +485,40 @@ def monitor(dE: np.ndarray, R: float, beta: float, k_floor: int,
 # --------------------------------------------------------------------------
 # Ausgabe
 # --------------------------------------------------------------------------
+def _bericht_live(erg: dict) -> str:
+    """Kompakter Bericht fuer einen einzelnen Live-Checkpoint (siehe _live_schritt).
+
+    Zeigt bewusst nur, was bei diesem k tatsaechlich berechnet wurde -- kein
+    khat, kein exaktes N_eff/n, keine Restglied-Diagnose. Die volle
+    Zertifizierung kommt erst mit dem Aufruf bei n >= n_plan (bericht()).
+    """
+    g = erg["gesamt"]
+    z = []
+    z.append("=" * 62)
+    z.append("  KISH-SCREENING — Live-Checkpoint")
+    z.append("=" * 62)
+    z.append(f"  Punkte              {g['n']} von {g['n_plan']} geplant")
+    z.append(f"  Temperatur          {g['T']:.1f} K   (beta = {g['beta']:.3f} 1/eV)")
+    z.append(f"  Ziel R              {g['R']}")
+    schritte = erg["monitor"]["schritte"] if erg.get("monitor") else []
+    if schritte:
+        s = schritte[0]
+        z.append("")
+        z.append(f"  c = beta*std(dE)    {s['c']:.4f}")
+        z.append(f"  c_max (schief)      {s['c_max']:.4f}")
+        z.append(f"  Abstand c - c_max   {s['abstand']:+.4f}   (Band {s['band']:.4f})")
+    z.append("")
+    z.append("=" * 62)
+    z.append(f"  URTEIL: {erg['urteil']}")
+    if erg.get("begruendung"):
+        z.append(f"  {erg['begruendung']}")
+    z.append("=" * 62)
+    return "\n".join(z)
+
+
 def bericht(erg: dict, zeige_schritte: bool) -> str:
+    if erg["gesamt"].get("live"):
+        return _bericht_live(erg)
     z = []
     g = erg["gesamt"]
     z.append("=" * 62)
@@ -552,6 +611,20 @@ def parser_bauen() -> argparse.ArgumentParser:
     p.add_argument("-k", "--k-floor", type=int, default=K_FLOOR, metavar="N",
                    help=f"Checkpoints unterhalb k werden verworfen "
                         f"(Default {K_FLOOR})")
+    p.add_argument("-N", "--n-plan", type=int, default=None, metavar="N",
+                   help="geplantes Gesamtbudget der Kampagne. Ohne diese "
+                        "Option laeuft das Checkpoint-Raster relativ zur "
+                        "aktuell vorliegenden Punktzahl (Batch-Modus). Mit "
+                        "--live noetig: legt das Raster fest, unabhaengig "
+                        "davon, wie viele Punkte gerade vorliegen.")
+    p.add_argument("--live", action="store_true",
+                   help="Live-Checkpoint-Modus fuer die Einbettung in eine "
+                        "laufende Kampagne: prueft nur den EINEN faelligen "
+                        "Checkpoint bei k = aktuelle Punktzahl (kein "
+                        "Raster-Walk), statt die Historie erneut zu simulieren. "
+                        "Erfordert --n-plan. Unterhalb --k-floor: WEITER ohne "
+                        "Check. Bei aktueller Punktzahl >= --n-plan: volle "
+                        "Zertifizierung wie im Batch-Modus.")
     p.add_argument("--first-frac", type=float, default=FIRST_FRAC, metavar="F",
                    help=f"Rasteranfang als Anteil von n (Default {FIRST_FRAC}). "
                         f"Nicht mit --k-floor verwechseln: das Raster beginnt "
@@ -572,6 +645,50 @@ def parser_bauen() -> argparse.ArgumentParser:
                    help="nur das Urteil (PASS/FAIL/UNKLAR)")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
+
+
+def _live_schritt(dE: np.ndarray, args, beta: float, k_floor: int) -> tuple[dict, int]:
+    """Ein Live-Checkpoint: genau EIN Aufruf von monitor_schritt() bei k = dE.size.
+
+    Kein Raster-Walk, kein khat-Gate, keine Restglied-/C_VALID-Diagnose --
+    die sind laut analyses/13_sequential_screening/README.md ohnehin nur eine
+    Nachpruefung auf dem PASS-Zweig bzw. fuer die finale Zertifizierung
+    gedacht (siehe rechnen(), Zweig n >= n_plan). cmax_skew's c_hi-Fallback
+    haelt die FAIL-Regel auch ausserhalb des Reihen-Gueltigkeitsbereichs
+    konservativ.
+    """
+    n = dE.size
+    gesamt = {"n": n, "n_plan": args.n_plan, "T": args.temperature, "beta": beta,
+              "R": args.target, "units": args.units, "band": args.band,
+              "k_floor": k_floor, "live": True}
+    erg = {"gesamt": gesamt, "version": __version__, "hinweise": [], "warnungen": []}
+
+    if n < k_floor:
+        erg["urteil"] = "WEITER"
+        erg["begruendung"] = (f"{n} von {args.n_plan} Punkten -- noch unter "
+                              f"--k-floor={k_floor}, kein Check.")
+        erg["monitor"] = None
+        return erg, EXIT_PASS
+
+    rng = np.random.default_rng(args.seed)
+    schritt = monitor_schritt(dE, args.target, beta, args.band, args.bootstrap, rng)
+    gesamt.update({"c": schritt["c"], "gamma1": schritt["gamma1"],
+                   "gamma2": schritt["gamma2"], "c_max": schritt["c_max"]})
+    erg["monitor"] = {"gefeuert": schritt["feuert"],
+                      "k_stop": schritt["k"] if schritt["feuert"] else None,
+                      "schritte": [schritt]}
+
+    if schritt["feuert"]:
+        erg["urteil"] = "FAIL"
+        erg["begruendung"] = (f"Monitor feuert bei k={n}: c={schritt['c']:.4f} "
+                              f"- {args.band:g}*SE > c_max={schritt['c_max']:.4f} "
+                              f"+ {args.band:g}*SE")
+        return erg, EXIT_FAIL
+
+    erg["urteil"] = "WEITER"
+    erg["begruendung"] = (f"{n} von {args.n_plan} Punkten, kein FAIL "
+                          f"(Abstand {schritt['abstand']:+.4f}) -- Kampagne fortsetzen.")
+    return erg, EXIT_PASS
 
 
 def rechnen(args) -> tuple[dict, int]:
@@ -598,10 +715,22 @@ def rechnen(args) -> tuple[dict, int]:
     if not 0.0 < args.first_frac <= 1.0:
         raise Abbruch(EXIT_USAGE,
                       f"--first-frac muss in (0,1] liegen, bekam {args.first_frac}")
+    if args.live and args.n_plan is None:
+        raise Abbruch(EXIT_USAGE, "--live erfordert --n-plan")
+    if args.n_plan is not None and args.n_plan < k_floor:
+        raise Abbruch(EXIT_USAGE,
+                      f"--n-plan muss >= --k-floor sein, bekam {args.n_plan} < {k_floor}")
 
-    dE = pruefe_daten(e_dft, e_ml, k_floor)
+    # n_plan nur im Live-Modus an die Validierung durchreichen: der Batch-Pfad
+    # baut den Monitor weiterhin ueber die tatsaechliche dE.size (siehe unten),
+    # ein n_plan waere dort ein Fenster ohne Wirkung, das die "zu wenige
+    # Punkte"-Pruefung nur lautlos aushebeln wuerde.
+    dE = pruefe_daten(e_dft, e_ml, k_floor, n_plan=args.n_plan if args.live else None)
     beta = 1.0 / (KB_EV * args.temperature)
     n = dE.size
+
+    if args.live and n < args.n_plan:
+        return _live_schritt(dE, args, beta, k_floor)
 
     c, g1, g2 = momente(dE, beta)
     cm = cmax_skew(args.target, g1, g2, warn=False)
@@ -617,7 +746,7 @@ def rechnen(args) -> tuple[dict, int]:
               "rho": c / cm, "neff_ratio": neff_ratio(w), "khat": kh, "r5": r5,
               "neff_ratio_reihe": float(np.exp(lnr_reihe)),
               "neff_ratio_gauss": float(np.exp(-c ** 2)),
-              "k_floor": k_floor, "first_frac": args.first_frac,
+              "k_floor": k_floor, "first_frac": args.first_frac, "n_plan": args.n_plan,
               "diagnose": diagnose(args.target, g1, g2)}
     erg = {"gesamt": gesamt, "version": __version__}
 

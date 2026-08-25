@@ -48,10 +48,6 @@ die kleinste positive Wurzel von
 
 $$c^2-\gamma_1c^3+\tfrac{7}{12}\gamma_2c^4 = -\ln R,$$
 
-gegen die Gauß-Variante $\sqrt{-\ln R}$, die die Form ignoriert. Rechtsschiefe
-erlaubt mehr $c$; die Gauß-Schranke ist dann konservativ, bei Linksschiefe kehrt
-sich das um.
-
 Entschieden wird über das Verhältnis der beiden:
 
 $$\boxed{\rho = \frac{c}{c_\text{max}}}\qquad
@@ -67,16 +63,27 @@ allein sagt nichts, solange die Schranke nicht danebensteht.
 |---|---|---|
 | $c$ | Skala, Entscheidungsgröße | stabil ab $k\approx14$; $\mathrm{SE}/c=\sqrt{(\gamma_2+2)/4k}$ |
 | $\gamma_1,\gamma_2$ | Formkorrektur, bestimmen $c_\text{max}$ | $\gamma_1$ stabil erst ab $k\approx210$ |
-| $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | $\mathrm{SE}\propto n^{-1/4}$ |
+| $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | immer erst auf vollen Satz am Ende einer Simulation berechnet |
+
+
+
+**Die Genauigkeit von gamma1/gamma2 reicht**, weil über $\gamma_1,\gamma_2$ nicht entschieden
+wird: sie verschieben nur $c_\text{max}$, und dort stehen sie als $\gamma_1c^3$
+bzw. $\gamma_2c^4$ gegen den führenden Term $c^2$. Die Empfindlichkeit ist
+entsprechend gering. Die Unsicherheit wird über Bootstrap quantifiziert. 
+
+**Ein echter Bruch** liegt nur bei sehr kleinem $k$: dort hat die Quartik
+gelegentlich gar keine Wurzel im Gültigkeitsbereich (43 % bei $k=5$), und
+$c_\text{max}$ ist dann nicht ungenau, sondern nicht definiert. Das — nicht die
+langsame Konvergenz von $\hat\gamma_1$ — ist die Begründung für `k_floor`.
 
 **$c$ allein ist kein Prädiktor.** Bei festem $c$ lässt sich $N_\text{eff}/n$
 zwischen 0,0007 und 0,99998 konstruieren. Verteilungsfrei gilt nur
-$c\to0 \Rightarrow N_\text{eff}/n\to1$.
+$c\to0 \Rightarrow N_\text{eff}/n\to1$. Deshalb muss die Schiefenkorrigierte Kumulatenentwicklung betrachtet werden. 
 
 **$\hat k$ ist ein Gate, kein Qualitätsmaß.** $E[w^2]<\infty \iff \hat k<0{,}5$.
 Ist das verletzt, ist $K(-2c)$ undefiniert und die Herleitung nicht ungenau,
-sondern gegenstandslos. $\hat k$ ist nicht extrapolierbar — es gibt keine
-Funktion $\hat k(c)$.
+sondern gegenstandslos. $\hat k$ wird jedoch immer nur am ende einer fertigen/abgebrochenen Simulation berechnet. 
 
 ---
 
@@ -88,7 +95,7 @@ Funktion $\hat k(c)$.
 | Reihe | $\exp(-c^2+\gamma_1c^3-\tfrac{7}{12}\gamma_2c^4)$ | Diagnose: trägt die Entwicklung bei diesem $c$? |
 | Gauss allein | $\exp(-c^2)$ | zeigt, wie viel die Formkorrektur ausmacht |
 
-Weichen „exakt" und „Reihe" deutlich ab, hält die Entwicklung nicht mehr — dann
+Weichen „exakt" und „Reihe" deutlich ab, hält die Entwicklung nicht mehr. Dann
 ist $c_\text{max}$ unbrauchbar, der exakte Kish-Wert aber weiterhin gültig. Die
 Kumulantenreihe geht **nicht** in das gemeldete $N_\text{eff}/n$ ein; sie liefert
 über die Quartik nur die Schranke, gegen die der Monitor vergleicht.
@@ -110,7 +117,7 @@ $$\hat c(k) - \mathrm{SE}\big(\hat c(k)\big)
 
 Drei Eigenschaften, die die Form erklären:
 
-**Einseitig.** Ein frühes PASS spart nichts — die Gewichte werden am Ende ohnehin
+**Einseitig.** Ein frühes PASS spart nichts. Die Gewichte werden am Ende ohnehin
 vollständig gebraucht. Nur ein früh abgesichertes FAIL spart Rechenzeit. Damit
 bleibt genau eine Fehlerart: ein brauchbares Modell abbrechen.
 
@@ -118,17 +125,7 @@ bleibt genau eine Fehlerart: ein brauchbares Modell abbrechen.
 stärker als $\hat c$; ein Band nur um $\hat c$ ließe die größere der beiden
 Unsicherheiten weg.
 
-**Ein Standardfehler je Seite, kein Vorfaktor.** Bei zwei verglichenen Bändern
-wäre ein $q$ kein Niveau — nichtüberlappende Konfidenzbänder sind ein
-konservativer Test für eine Differenz, ein nominelles 5 % wäre effektiv etwa
-0,5 %. Statt einer Niveauaussage, die nicht hält, ist die Bandbreite eine
-**Konvention**.
 
-Alle Größen bei $k$ benutzen ausschließlich die ersten $k$ Punkte — der Monitor
-sieht die Zukunft nicht. Das Raster beginnt bei `first_frac·n` (Default 10 %),
-wächst mit Faktor 1,4, und `k_floor` (Default 50) schneidet alles darunter ab.
-Beides sind **getrennte** Parameter: für $n \ge 500$ liegt der Rasteranfang über
-50 und der Filter ist wirkungslos, darunter greift er.
 
 **Warum nicht früher geschaut wird.** Der späte Start ist der eigentliche Hebel,
 nicht die Rasterdichte: von $k\ge5$ auf $k\ge50$ fällt der Fehlalarm um Faktor 6,
@@ -168,7 +165,7 @@ $\Delta E$ invariant, das Ergebnis ändert sich also nicht.
 
 ### Die zwei Standardfehler
 
-Sie kommen aus verschiedenen Quellen, und das ist gemessen, nicht gesetzt:
+Sie kommen aus verschiedenen Quellen:
 
 | | Herkunft | Begründung |
 |---|---|---|
@@ -178,18 +175,6 @@ Sie kommen aus verschiedenen Quellen, und das ist gemessen, nicht gesetzt:
 Der Bootstrap ist über `--seed` reproduzierbar. Die geschätzte Bandbreite streut
 selbst um $1/\sqrt{2B}$ — bei $B=200$ sind das 5 %. Wer knapp an der
 Entscheidungsgrenze liegt, nimmt `-B 1000`.
-
-### Eingabekonventionen
-
-**Energien pro Zelle, nicht pro Atom.** Das Kriterium hängt an der Streuung der
-*Gesamtenergie*; wegen $c\propto\sqrt N$ liefern Energien pro Atom stillschweigend
-ein falsches $c$. Das Skript kann das nicht bemerken.
-
-**Reihenfolge = Anfallreihenfolge.** Der Monitor liest die Zeilen als den Strom,
-in dem die Punkte entstehen.
-
-**Einheiten** über `-u` (Default eV), **Temperatur** über `-T`. Beide gehen über
-$\beta = 1/k_BT$ direkt in $c$ ein.
 
 ---
 
@@ -207,35 +192,7 @@ Gütefunktion, kein Umsetzungsfehler.
 | Grauzone | $0{,}95\dots1{,}2$ | Fehlalarm bis 11 %, Erkennung erst 76 % bei $\rho=1{,}1$ | **nein** |
 | sicher FAIL | $\gtrsim1{,}2$ | Erkennung 99 %, Abbruch beim ersten Checkpoint | **ja** |
 
-**Korrelierte Daten machen den Monitor zu selbstsicher.** Die Standardfehler
-setzen unabhängige Punkte voraus; $\mathrm{SE}(c)$ kennt keine
-Autokorrelationszeit. Auf einem AR(1)-Strom mit $\rho_1 = 0{,}38$ gegen
-iid-Ziehungen aus derselben Randverteilung:
 
-| $\rho$ (wahr PASS) | zusammenhängende Fenster | iid |
-|---|---|---|
-| 0,90 | 0 % | 0 % |
-| 0,95 | **6 %** | 1 % |
-
-Aus $\tau = (1+\rho_1)/(1-\rho_1) \approx 2{,}2$ folgt $\sqrt\tau \approx 1{,}5$:
-die Bänder müssten rund 50 % breiter sein. Eine Korrektur ist **nicht** eingebaut.
-Bei dicht aufeinanderfolgenden Frames ausdünnen oder das Ergebnis als optimistisch
-lesen.
-
-**$\hat k$ ist stark verrauscht.** Der Standardfehler fällt nur wie $n^{-1/4}$ und
-liegt bei $n=500$ bei etwa 0,15 — ein einzelner Wert kann die 0,5-Schwelle nicht
-sicher entscheiden. Das Skript rechnet $\hat k$ deshalb immer auf dem **vollen**
-übergebenen Satz, nie auf einem Präfix. In einem Produktionslauf gehört das Gate
-auf den vollständigen Testsatz, nicht auf die laufende Sequenz.
-
-**$N_\text{eff}$ misst Ungleichheit, nicht Abdeckung.** Gleichmäßige Gewichte
-schließen nicht aus, dass eine wichtige Region des Konfigurationsraums nie besucht
-wurde.
-
-**Reweighting korrigiert auf die DFT-Referenz, nicht auf die Realität.** Fehler
-des Funktionals bleiben unangetastet.
-
----
 
 ## 7. Aufruf
 
@@ -259,6 +216,44 @@ Schlüssel über `--key-dft` / `--key-ml`.
 | `-b` | Bandbreite in Standardfehlern je Seite | 1.0 |
 | `-B` | Bootstrap-Resamples je Checkpoint | 200 |
 | `--seed` | Zufallsstartwert | 0 |
+| `-N` / `--n-plan` | geplantes Gesamtbudget der Kampagne (siehe §7a) | — |
+| `--live` | Live-Checkpoint-Modus, erfordert `-N` (siehe §7a) | aus |
+
+### 7a. Live-Modus — Einbettung in eine laufende MD/DFT-Kampagne
+
+Ohne `--live` geht das Skript von einem **fertigen** Datensatz aus: das
+Checkpoint-Raster (§4) wird relativ zur Zahl der übergebenen Punkte gebaut,
+und ein Aufruf simuliert die **gesamte** Historie retrospektiv — sinnvoll für
+eine einmalige Analyse oder für die Methodenvalidierung
+(`analyses/13_sequential_screening/`), aber nicht für wiederholte Aufrufe
+während eine MD-Simulation noch läuft: das Raster verschiebt sich mit jedem
+neuen Punkt, und jeder Aufruf rechnet die bereits entschiedene Historie samt
+Bootstrap neu.
+
+`--live -N n_plan` löst das: `n_plan` ist das geplante Gesamtbudget, unabhängig
+davon, wie viele Punkte gerade vorliegen. Das Raster wird relativ zu `n_plan`
+gebaut und bleibt über wiederholte Aufrufe mit wachsendem Datensatz stabil.
+Ein Aufruf prüft dann **nur den einen gerade fälligen Checkpoint**
+(`k = Zahl der übergebenen Punkte`), nicht die Historie:
+
+* `k < k_floor` → `WEITER`, kein Check (zu wenige Punkte).
+* `k_floor <= k < n_plan` → ein Schritt der Monitor-Regel aus §4 bei diesem
+  `k`. Feuert sie → `FAIL` (Exit 1, Kampagne abbrechen). Sonst → `WEITER`
+  (Exit 0, weiterrechnen). Das $\hat k$-Gate, der exakte Kish-Wert und die
+  Restglied-Diagnose werden hier **nicht** geprüft — sie gehören laut §6 ohnehin
+  auf den vollständigen Satz, nicht auf die laufende Sequenz.
+* `k >= n_plan` → alle geplanten Punkte liegen vor; derselbe Aufruf liefert
+  automatisch die volle Zertifizierung wie ohne `--live` (khat, exaktes
+  $N_\text{eff}/n$, PASS/FAIL/UNKLAR).
+
+```bash
+# bei jedem neuen DFT-Batch erneut aufrufen, mit den bis dahin gesammelten Punkten
+python3 kish_screening.py e_dft_bisher.npy e_mace_bisher.npy \
+    -R 0.8 -T 292 -N 5000 --live -q || {
+    echo "FAIL — MD/DFT-Kampagne abbrechen" >&2
+    exit 1
+}
+```
 
 ---
 
@@ -285,7 +280,7 @@ gesamt/
   neff_ratio                          exakter Kish-Wert  <- entscheidet
   neff_ratio_reihe, neff_ratio_gauss  Vergleichswerte (Diagnose)
   khat, r5                            Gate und Restglied
-  k_floor, first_frac                 Rasterparameter
+  k_floor, first_frac, n_plan         Rasterparameter (n_plan nur mit -N)
   diagnose[]                          Meldungen zur Quartik
 version                               "1.1"
 hinweise[], warnungen[]               Klartextmeldungen
@@ -296,9 +291,18 @@ monitor/
   checkpoints[]                       das benutzte Raster
   schritte[]                          je Checkpoint: k, c, gamma1, gamma2,
                                       c_max, se_c, se_c_max, abstand, band, feuert
-urteil                                "PASS" | "FAIL" | "UNKLAR"
+urteil                                "PASS" | "FAIL" | "UNKLAR" | "WEITER"
 begruendung                           Klartext
 ```
+
+Im Live-Modus (`--live`, solange `k < n_plan`) ist `gesamt` schlanker: nur
+`n, n_plan, T, beta, R, units, band, k_floor` plus (ab `k >= k_floor`)
+`c, gamma1, gamma2, c_max` aus dem einen geprüften Schritt — `sigma`,
+`c_max_gauss`, `rho`, `neff_ratio*`, `khat`, `r5`, `diagnose` fehlen, weil sie
+dort nicht berechnet werden (§7a). `monitor.schritte` enthält dann genau
+einen Eintrag statt des ganzen Rasters. `urteil` ist `"WEITER"` oder
+`"FAIL"`, nie `"PASS"`/`"UNKLAR"` — die entscheidet erst der Aufruf bei
+`k >= n_plan`.
 
 `schritte[]` enthält $\mathrm{SE}(\hat c)$ und $\mathrm{SE}(\hat c_\text{max})$
 **getrennt** — im Bericht steht nur ihre Summe unter „Band". Für die Frage, ob
@@ -309,7 +313,7 @@ nötig.
 
 | Code | Bedeutung |
 |---|---|
-| 0 | PASS |
+| 0 | PASS (bzw. im Live-Modus: WEITER — kein FAIL bisher, Kampagne fortsetzen) |
 | 1 | FAIL |
 | 2 | Aufrufsfehler |
 | 3 | Datenfehler |
@@ -317,6 +321,9 @@ nötig.
 
 UNKLAR wird nur gemeldet, wenn der exakte Kish-Wert nicht ohnehin FAIL sagt — ein
 FAIL aus der annahmefreien Zahl steht unabhängig von jeder Reihenentwicklung.
+Im Live-Modus kann UNKLAR (Exit 4) grundsätzlich nicht auftreten, solange
+`k < n_plan` — das Gate dafür wird erst bei der vollen Zertifizierung ab
+`k >= n_plan` geprüft (§7a).
 
 ### Beispiele
 
@@ -355,9 +362,3 @@ et al. (JMLR 25, 2024) für PSIS benutzen.
 
 Anwendungskontext: Hilpert & Kresse, *Accurate thermophysical properties of water
 using machine-learned potentials*, J. Chem. Phys. 164, 194504 (2026).
-
-Die Kernfunktionen sind gegen `uq_mace.screening` / `uq_mace.reweighting`
-geprüft: bitgleich bei `momente`, `se_c`, `gewichte`, `neff_ratio`, `psis_khat`,
-`log_neff_ratio`, `diagnose`; `cmax_skew` gegen die Newton-Fassung
-$4{,}7\cdot10^{-15}$ auf 3721 Parameterpaaren; 90 von 90 Monitorläufen
-entscheidungsgleich.

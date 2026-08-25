@@ -30,6 +30,10 @@ dist/
 .mypy_cache/
 .ipynb_checkpoints/
 
+# Editor-/Notebook-Sicherungskopien -- gehoeren nicht ins Repo, siehe
+# Results/UQ_L0/screening_methode.ipynb.bak (1.5 MB, entfernt)
+*.bak
+
 # ---------------------------------------------------------------------------
 # Editor / OS
 # ---------------------------------------------------------------------------

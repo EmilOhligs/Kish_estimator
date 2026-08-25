@@ -19,6 +19,13 @@ def effective_sample_size(weights: np.ndarray) -> float:
     """N_eff = (sum w)^2 / sum(w^2). Ranges from 1 (single dominant sample) to N."""
     return float(weights.sum() ** 2 / np.sum(weights ** 2))
 
+
+def reweighted_average(values: np.ndarray, weights: np.ndarray) -> float:
+    """Weighted average sum(a*w)/sum(w) -- the reweighted estimate of <A>_DFT."""
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    return float((values * weights).sum() / weights.sum())
+
 # ---------------------------------------------------------------------------
 # Task 1 (H0): N_eff prediction and reweighting diagnostics
 # ---------------------------------------------------------------------------

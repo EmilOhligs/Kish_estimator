@@ -194,10 +194,12 @@ def diagnose(R: float, g1: float, g2: float, rem_tol: float = R5_TOL) -> list[st
       ist f streng monoton auf (0, inf) und die Wurzel eindeutig. Sonst kann es
       weitere geben -- cmax_skew nimmt die kleinste, was richtig ist, aber die
       Situation sollte sichtbar sein.
-    * **N_eff <= n.** Cauchy-Schwarz erzwingt log(N_eff/n) <= 0. Die abgebrochene
-      Reihe verletzt das ab der kleinsten positiven Wurzel von
-      -(7/12) g2 c^2 + g1 c - 1 = 0; existiert die (d.h. g1^2 >= (7/3) g2) und
-      liegt c_max jenseits davon, ist der Wert bedeutungslos.
+    * **N_eff <= n.** Cauchy-Schwarz erzwingt log(N_eff/n) <= 0. Geprueft wird
+      das direkt an c_max ueber log_neff_ratio -- nicht ueber die Nullstellen
+      von dessen Ableitung, denn deren ungueltige Zone ist bei g2 > 0 ein
+      BEGRENZTES Intervall zwischen zwei Nullstellen: jenseits der groesseren
+      ist der Wert wieder gueltig. Ein Test nur gegen die kleinere Nullstelle
+      (frueherer Ansatz) erzeugt dort falsch-positive Meldungen.
     * **A2-Restglied.** (2 c_max)^5 / 5! <= rem_tol.
     """
     out: list[str] = []
@@ -208,17 +210,10 @@ def diagnose(R: float, g1: float, g2: float, rem_tol: float = R5_TOL) -> list[st
                    f"(56/27) g2={(56/27)*g2:.4g}) - weitere positive Wurzeln "
                    f"moeglich; kleinste gewaehlt")
 
-    if g1**2 >= (7 / 3) * g2:
-        a = -(7 / 12) * g2
-        if abs(a) < 1e-300:
-            c_abs = 1.0 / g1 if g1 > 0 else np.inf
-        else:
-            sq = np.sqrt(g1**2 - (7 / 3) * g2)
-            cand = [x for x in ((-g1 + sq) / (2 * a), (-g1 - sq) / (2 * a)) if x > 0]
-            c_abs = min(cand) if cand else np.inf
-        if c >= c_abs:
-            out.append(f"c_max={c:.4f} liegt jenseits der Gueltigkeitsgrenze "
-                       f"c_abs={c_abs:.4f}, wo die Reihe N_eff > n behauptet")
+    lnr = log_neff_ratio(c, g1, g2)
+    if lnr > 0.0:
+        out.append(f"c_max={c:.4f} verletzt N_eff <= n (log(N_eff/n)={lnr:.4g} > 0, "
+                   f"Cauchy-Schwarz) - der Wert ist dort bedeutungslos")
 
     rem = (2.0 * c) ** 5 / 120.0
     if rem > rem_tol:
