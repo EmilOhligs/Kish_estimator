@@ -9,6 +9,39 @@ Eine Datei, nur numpy. Version 1.1.
 
 ---
 
+## Quickstart
+
+Kein Beispieldatensatz nötig — das Skript hängt an keinen Projektdaten, ein
+Zwei-Zeiler erzeugt synthetische DFT-/ML-Energien und lässt es einmal
+komplett durchlaufen:
+
+```bash
+python3 -c "
+import numpy as np
+rng = np.random.default_rng(0)
+e_dft = rng.normal(0, 0.01, 500)            # eV, willkuerliche Referenz
+e_ml  = e_dft + rng.normal(0, 0.003, 500)   # 'Modell' trifft DFT ungefaehr
+np.save('/tmp/e_dft_demo.npy', e_dft)
+np.save('/tmp/e_ml_demo.npy', e_ml)
+"
+python3 kish_screening.py /tmp/e_dft_demo.npy /tmp/e_ml_demo.npy -R 0.8 -T 292
+```
+
+Der Modellfehler ist hier klein gegen die Streuung, also ein klarer
+PASS-Fall. Für den Live-Checkpoint-Modus (§7a), der bei jedem neuen
+DFT-Batch einer laufenden Kampagne erneut aufgerufen wird:
+
+```bash
+python3 kish_screening.py /tmp/e_dft_demo.npy /tmp/e_ml_demo.npy \
+    -N 500 --live -R 0.8 -T 292 -q
+```
+
+`tools/live_screening_sim.sh` simuliert diesen Live-Ablauf zusätzlich über
+mehrere wachsende Checkpoints hinweg an einem beliebigen eigenen Cache, siehe
+Kommentar am Dateianfang.
+
+---
+
 ## 1. Die Größe, um die es geht
 
 Reweighting korrigiert Mittelwerte eines ML-Potentials auf DFT-Niveau:
@@ -63,7 +96,7 @@ allein sagt nichts, solange die Schranke nicht danebensteht.
 |---|---|---|
 | $c$ | Skala, Entscheidungsgröße | stabil ab $k\approx14$; $\mathrm{SE}/c=\sqrt{(\gamma_2+2)/4k}$ |
 | $\gamma_1,\gamma_2$ | Formkorrektur, bestimmen $c_\text{max}$ | $\gamma_1$ stabil erst ab $k\approx210$ |
-| $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | immer erst auf vollen Satz am Ende einer Simulation berechnet |
+| $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | nur auf dem vollen, geplanten Satz belastbar — nie auf einem Präfix (siehe §7a) |
 
 
 
@@ -83,7 +116,10 @@ $c\to0 \Rightarrow N_\text{eff}/n\to1$. Deshalb muss die Schiefenkorrigierte Kum
 
 **$\hat k$ ist ein Gate, kein Qualitätsmaß.** $E[w^2]<\infty \iff \hat k<0{,}5$.
 Ist das verletzt, ist $K(-2c)$ undefiniert und die Herleitung nicht ungenau,
-sondern gegenstandslos. $\hat k$ wird jedoch immer nur am ende einer fertigen/abgebrochenen Simulation berechnet. 
+sondern gegenstandslos. $\hat k$ wird deshalb nie auf einem Präfix berechnet,
+sondern nur, sobald der volle geplante Satz vorliegt — im Batch-Modus also
+immer, im Live-Modus (§7a) erst beim Aufruf, der `n_plan` erreicht, nicht bei
+einem früheren FAIL-Abbruch.
 
 ---
 
@@ -211,6 +247,7 @@ Schlüssel über `--key-dft` / `--key-ml`.
 | `-R` | gefordertes $N_\text{eff}/n$ | 0.8 |
 | `-T` | Temperatur in Kelvin | 292 |
 | `-u` | Einheit der Eingabeenergien | eV |
+| `--key-dft` / `--key-ml` | npz-Schlüssel bei zwei Dateien (siehe oben) | automatische Suche |
 | `-k` | Checkpoints unterhalb $k$ verwerfen | 50 |
 | `--first-frac` | Rasteranfang als Anteil von $n$ | 0.10 |
 | `-b` | Bandbreite in Standardfehlern je Seite | 1.0 |
@@ -218,6 +255,10 @@ Schlüssel über `--key-dft` / `--key-ml`.
 | `--seed` | Zufallsstartwert | 0 |
 | `-N` / `--n-plan` | geplantes Gesamtbudget der Kampagne (siehe §7a) | — |
 | `--live` | Live-Checkpoint-Modus, erfordert `-N` (siehe §7a) | aus |
+| `--version` | Version ausgeben und beenden | — |
+
+Ausgabeform (`--steps`, `-q`, `--json`, `--no-monitor`) ist eine eigene
+Optionsgruppe, siehe Tabelle in §8.
 
 ### 7a. Live-Modus — Einbettung in eine laufende MD/DFT-Kampagne
 
