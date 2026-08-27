@@ -20,9 +20,22 @@ $$\langle A\rangle_\text{DFT} \approx \frac{\sum_i A_i w_i}{\sum_i w_i},
 
 Whether that reweighting is worth anything depends entirely on how unequal
 the weights $w_i$ turn out to be — measured by the **Kish effective sample
-size** $N_\text{eff}/n$. This repo is built around answering, and predicting
-in advance, that one question: does the reweighting carry, and if not, how
-early can you tell (before spending the full DFT budget)?
+size** $N_\text{eff}/n$. Each $w_i$ needs its own DFT single-point
+calculation, so this is really two questions in one: does the reweighting
+carry at all, and — since you'd rather not find out only after paying for
+every DFT point — can that be decided *early*, from a small, growing prefix
+of the campaign, so a doomed run gets aborted instead of run to completion?
+
+This repo answers both: `kish_screening.py` decides PASS/FAIL from the full
+weight distribution, and a sequential monitor checks that same criterion at
+a geometrically spaced schedule of checkpoints (first look at 10% of the
+planned points, then $\times 1.4$ each time — see
+[`README_kish_screening.md`](README_kish_screening.md) §4 for exactly how
+that schedule and its lower floor are set) so it can call FAIL long before
+the campaign finishes. On the real test data used during development, a
+model that ultimately fails the criterion was already caught at that very
+first checkpoint — about 10% of the planned points in — meaning roughly 90%
+of the remaining DFT budget would have been saved by stopping there.
 
 ## Repository structure
 
