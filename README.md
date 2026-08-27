@@ -30,8 +30,8 @@ early can you tell (before spending the full DFT budget)?
 |---|---|
 | [`kish_screening.py`](kish_screening.py) | Standalone, scipy-free CLI tool — the centerpiece. Decides PASS/FAIL and simulates/runs a sequential early-stopping monitor. Full docs: [`README_kish_screening.md`](README_kish_screening.md) |
 | [`src/uq_mace/`](src/uq_mace/) | Core library (`uq-mace` package): reweighting, sequential-screening, ensemble-evaluation and calibration code used across the `analyses/` studies |
-| [`analyses/`](analyses/) | 13 numbered studies, each script paired with its own plots/CSVs — see [`analyses/README.md`](analyses/README.md) for the full map and findings |
-| [`Results/UQ_L0/`](Results/UQ_L0/) | Write-up notebook for the L0-model sequential-screening study (the applied result on real data) |
+| [`analyses/`](analyses/) | 13 numbered, early-stage studies used to build up and stress-test the statistics piece by piece — see [`analyses/README.md`](analyses/README.md) for the full map |
+| [`Results/UQ_L0/`](Results/UQ_L0/) | The polished write-up: the complete method end-to-end plus the applied L0-model result, in one notebook |
 | [`tests/`](tests/) | `pytest` suite — runs in CI without any of the (gitignored) research data, see below |
 | [`tools/`](tools/) | Helper scripts, e.g. [`live_screening_sim.sh`](tools/live_screening_sim.sh) to replay `kish_screening.py`'s live-checkpoint mode against any local cache |
 
@@ -45,6 +45,25 @@ core formulas are kept in sync by construction (both are covered by tests,
 [`tests/test_screening.py`](tests/test_screening.py) for the library and
 [`tests/test_kish_screening_live.py`](tests/test_kish_screening_live.py) for
 the CLI) and were cross-checked bit-for-bit during development.
+
+### From exploration to write-up
+
+`analyses/` is where the statistical framework was built up and tested
+piece by piece — skewness corrections, the sequential monitor, the
+$\hat k$ tail diagnostic, and so on, each in its own numbered folder.
+Once the approach was settled, the complete process — formalism,
+validation, and the applied result on real L0-model data — was written up
+as one self-contained notebook in
+[`Results/UQ_L0/screening_methode.ipynb`](Results/UQ_L0/screening_methode.ipynb).
+Start there for the whole story in one place; use
+[`analyses/README.md`](analyses/README.md) as a map if you want to dig into
+a specific sub-question instead.
+
+**A note on language:** this top-level README is in English, but the
+detailed research notes are not — the notebook, `analyses/README.md`,
+[`README_kish_screening.md`](README_kish_screening.md), and most code
+comments/docstrings are written in German, the working language of the
+underlying research project.
 
 ### Data, models, cache — intentionally not in this repo
 
