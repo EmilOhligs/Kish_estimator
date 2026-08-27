@@ -21,21 +21,29 @@ $$\langle A\rangle_\text{DFT} \approx \frac{\sum_i A_i w_i}{\sum_i w_i},
 Whether that reweighting is worth anything depends entirely on how unequal
 the weights $w_i$ turn out to be — measured by the **Kish effective sample
 size** $N_\text{eff}/n$. Each $w_i$ needs its own DFT single-point
-calculation, so this is really two questions in one: does the reweighting
-carry at all, and — since you'd rather not find out only after paying for
-every DFT point — can that be decided *early*, from a small, growing prefix
-of the campaign, so a doomed run gets aborted instead of run to completion?
+calculation, so the naive way to find out is to run the whole campaign and
+check at the end.
 
-This repo answers both: `kish_screening.py` decides PASS/FAIL from the full
-weight distribution, and a sequential monitor checks that same criterion at
-a geometrically spaced schedule of checkpoints (first look at 10% of the
-planned points, then $\times 1.4$ each time — see
-[`README_kish_screening.md`](README_kish_screening.md) §4 for exactly how
-that schedule and its lower floor are set) so it can call FAIL long before
-the campaign finishes. On the real test data used during development, a
-model that ultimately fails the criterion was already caught at that very
-first checkpoint — about 10% of the planned points in — meaning roughly 90%
-of the remaining DFT budget would have been saved by stopping there.
+**The core of this repo, `kish_screening.py`, is a sequential early-stopping
+monitor that avoids exactly that.** It re-evaluates the same PASS/FAIL
+criterion on a growing prefix of the campaign, at a geometrically spaced
+schedule of checkpoints (first look at 10% of the planned points, then
+$\times 1.4$ each time — see [`README_kish_screening.md`](README_kish_screening.md)
+§4 for exactly how that schedule and its lower floor are set). It is
+deliberately **one-sided**: the workflow never predicts in advance that the
+reweighting *will* work — an early PASS is never reported, since all points
+are needed regardless once it's confirmed good — it only ever calls an
+early, statistically secured **FAIL**, letting a doomed run be aborted
+instead of paying for the rest of it.
+
+On the real test data used during development, a model that ultimately
+failed the criterion was already caught at that very first checkpoint —
+about 10% of the planned points in, saving roughly 90% of the remaining DFT
+calculations. In a production setting where MD and DFT run together as one
+live campaign (the scenario `--live` is built for, see below), stopping
+there naturally saves not just DFT compute but roughly 90% of the MD
+simulation time too, since the whole campaign is aborted, not only its DFT
+side.
 
 ## Repository structure
 
