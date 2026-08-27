@@ -541,8 +541,13 @@ def bericht(erg: dict, zeige_schritte: bool) -> str:
              f"   {'>=' if g['neff_ratio'] >= g['R'] else '<'} R = {g['R']}")
     z.append(f"  N_eff/n (Reihe)     {g['neff_ratio_reihe']:.4f}"
              f"   Gauss allein: {g['neff_ratio_gauss']:.4f}")
-    z.append(f"  khat (Tail-Index)   {g['khat']:+.3f}"
-             f"   {'Gate bestanden' if g['khat'] < KHAT_GATE else 'GATE VERLETZT'}")
+    if np.isnan(g['khat']):
+        khat_status = "nicht bestimmbar (< 25 positive Gewichte)"
+    elif g['khat'] < KHAT_GATE:
+        khat_status = "Gate bestanden"
+    else:
+        khat_status = "GATE VERLETZT"
+    z.append(f"  khat (Tail-Index)   {g['khat']:+.3f}   {khat_status}")
     z.append(f"  Restglied (2c)^5/5! {g['r5']:.4f}"
              f"   {'ok' if g['r5'] <= R5_TOL else 'Reihe unbrauchbar'}")
     for h in erg.get("hinweise", []):

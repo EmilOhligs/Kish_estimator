@@ -4,7 +4,7 @@
 untauglich einzustufen — statt den ganzen Testsatz (oder gar 5000 Frames)
 durchzurechnen?
 
-**Anlass:** Tobi hat gesagt, dass das Einsparen von DFT-Rechnungen speziell bei den
+**Anlass:** Aus der Projektgruppe kam die Anregung, dass das Einsparen von DFT-Rechnungen speziell bei den
 schnellen, ungenauen **L0-Modellen** interessant wäre. Für ein *schlechtes* Modell
 muss man nicht 400 Punkte rechnen, um zu sehen, dass das Reweighting nicht trägt —
 $c = \beta\,\mathrm{std}(\Delta E)$ konvergiert schnell und liegt weit über der Schwelle.
@@ -22,7 +22,7 @@ Skript: `sequential_screening.py` · Ausgaben: `sequential_workflow_R*.png`,
 > Bei **L0** ist die MD billig, also dominieren die DFT-Einzelpunkte die Kosten. Rechnet
 > man sie auf den MD-Frames **nacheinander** und sieht früh, dass $c$ weit über der
 > Schwelle liegt, bricht man ab und spart den Großteil der DFT-Kampagne — statt eine
-> aussichtslose Reweighting-Rechnung zu Ende zu ziehen. Das ist der von Tobi genannte
+> aussichtslose Reweighting-Rechnung zu Ende zu ziehen. Das ist der eingangs genannte
 > Anwendungsfall. Die Konvergenz von $c$, $\gamma_1$ bei kleinem $k$ (unten) ist damit
 > **direkt die Auszahlung**: sie bestimmt, nach wie wenigen DFT-Punkten das Urteil steht.
 >

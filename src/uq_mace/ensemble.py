@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Hyperparameter der L2c-Architektur (Hilpert & Kresse 2026: L=2, equivariant).
 # Werden nur genutzt, wenn die config sie nicht ueberschreibt. Fuer Member, die
-# sich NUR im Seed von mace-L2-c-01/02 unterscheiden, hier ggf. Tobis exakte
-# Trainings-Hyperparameter eintragen.
+# sich NUR im Seed von mace-L2-c-01/02 unterscheiden, hier ggf. die exakten
+# Referenz-Trainings-Hyperparameter eintragen.
 L2C_DEFAULTS = dict(
     model="MACE",
     max_L=2,

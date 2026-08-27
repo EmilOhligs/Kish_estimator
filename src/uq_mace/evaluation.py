@@ -1,6 +1,6 @@
 """Evaluate MACE ensembles against DFT reference data.
 
-Implements what Tobi asked for directly:
+Implements the following evaluation protocol:
     - load an ensemble of MACE models with ASE (mace.calculators.MACECalculator)
     - attach each model as atoms.calc, read off atoms.get_potential_energy() /
       atoms.get_forces()
@@ -9,7 +9,7 @@ Implements what Tobi asked for directly:
     - compute the ensemble spread (std across members) per configuration and check
       whether it correlates with the actual error (the core UQ question of this project)
 
-Expected benchmarks on water_test_small.xyz (from Tobi, 2026-07; note these are
+Expected benchmarks on water_test_small.xyz (project reference values, 2026-07; note these are
 FORCE RMSEs in meV/Angstrom - energy RMSE comes out around 0.05-0.2 meV/atom):
     L0 models: force RMSE ~10 meV/Angstrom
     L2 models: force RMSE ~5 meV/Angstrom
@@ -95,7 +95,7 @@ def evaluate_ensemble_members(model_dir: str | Path, frames, device: str = "cpu"
 def local_force_sigma_and_error(forces_stacked: list[np.ndarray], f_ref: list[np.ndarray]):
     """Pool per-atom force sigma and per-atom force error across all frames.
 
-    This is the "local average" Tobi suggested: instead of one sigma/error pair per
+    This is the "local average" variant: instead of one sigma/error pair per
     frame (coarse, ~125 points), get one pair per atom (fine, ~125 x 190 points).
 
     forces_stacked: list length n_frames, each array (n_members, n_atoms_i, 3) - as

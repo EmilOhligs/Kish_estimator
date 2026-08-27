@@ -2,7 +2,7 @@
 Sequenzielles Screening — wie wenige DFT-Punkte entscheiden über ein Modell?
 ============================================================================
 
-DIE FRAGE (Tobi: DFT-Sparen bei L0-Modellen ist interessant). Für ein SCHLECHTES
+DIE FRAGE (DFT-Sparen bei L0-Modellen ist besonders interessant). Für ein SCHLECHTES
 Modell muss man nicht 400 (oder 5000) DFT-Einzelpunkte rechnen, um zu sehen, dass
 das Reweighting nicht trägt. c = beta*std(dE) konvergiert schnell, und sobald c
 sicher über c_max = sqrt(-ln R) liegt, ist die Entscheidung "NO-GO" gefallen —

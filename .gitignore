@@ -9,6 +9,7 @@ models/
 
 # Persoenliche Arbeitsnotizen
 notebooks/
+Results/UQ_L0/validierungsplan.md
 
 # Interne Code-Uebersicht (nicht fuer die Veroeffentlichung)
 code_overview.html

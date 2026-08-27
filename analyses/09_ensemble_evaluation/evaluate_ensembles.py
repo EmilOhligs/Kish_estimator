@@ -4,7 +4,7 @@
 Usage:
     python analyses/evaluate_ensembles.py
 
-Reproduces what Tobi asked for (email, 2026-07-08):
+Reproduces the following evaluation protocol (agreed 2026-07-08):
     1. RMSE of each ensemble on water_test_small.xyz (expect force RMSE ~10 meV/A
        for L0, ~5 meV/A for L2; energy RMSE lands around 0.05-0.2 meV/atom).
     2. Whether the ensemble standard deviation (sigma) of forces/energies correlates
