@@ -106,6 +106,9 @@ automatically when it's absent (as in CI).
 
 ## Setup
 
+This installs the `uq-mace` library that `analyses/` and most of the test
+suite import.
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
