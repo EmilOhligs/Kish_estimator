@@ -27,9 +27,9 @@ np.save('/tmp/e_ml_demo.npy', e_ml)
 python3 kish_screening.py /tmp/e_dft_demo.npy /tmp/e_ml_demo.npy -R 0.8 -T 292
 ```
 
-Der Modellfehler ist hier klein gegen die Streuung, also ein klarer
-PASS-Fall. Für den Live-Checkpoint-Modus (§7a), der bei jedem neuen
-DFT-Batch einer laufenden Kampagne erneut aufgerufen wird:
+Der Modellfehler ist hier klein gegen die Streuung, ein klarer PASS-Fall.
+Für den Live-Checkpoint-Modus (§7a), gedacht für wiederholte Aufrufe
+während eine Kampagne noch läuft:
 
 ```bash
 python3 kish_screening.py /tmp/e_dft_demo.npy /tmp/e_ml_demo.npy \
@@ -62,19 +62,59 @@ mehr Frames helfen nicht, wenn die Gewichtsverteilung schlecht ist.
 
 ## 2. Der Formalismus
 
-Mit $\Delta E = \mu + \sigma z$ wird $w = e^{-\beta\mu}\cdot e^{-cz}$. Der Offset
-kürzt sich heraus, übrig bleibt eine einzige Skala:
+Mit $\Delta E = \mu + \sigma z$, $z$ standardisiert ($E[z]=0$,
+$\mathrm{Var}(z)=1$), wird $w = e^{-\beta\mu}\cdot e^{-cz}$. Der Offset $\mu$
+geht nicht mehr ein, übrig bleibt eine einzige Skala:
 
 $$\boxed{c = \beta\,\mathrm{std}(\Delta E)}$$
 
-Über die kumulantenerzeugende Funktion folgt exakt
+**Von den Gewichten zum Kish-Wert.** Im Grenzwert $n\to\infty$ werden aus den
+Summen Erwartungswerte, $\tfrac1n\sum w_i \to E[w]$ und $\tfrac1n\sum w_i^2
+\to E[w^2]$:
 
-$$\log\frac{N_\text{eff}}{n} = 2K(-c)-K(-2c)
-= -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4 + O(c^5).$$
+$$\frac{N_\text{eff}}{n} = \frac{(\sum w_i)^2}{n\sum w_i^2}
+\;\longrightarrow\; \frac{E[w]^2}{E[w^2]}.$$
 
-Effektiver Entwicklungsparameter ist $2c$, nicht $c$ — $K$ wird auch bei $t=-2c$
-ausgewertet. Aus der Restabschätzung $(2c)^5/5! \le 0{,}05$ folgt die
-Gültigkeitsgrenze $C_\text{VALID} = \tfrac12(120\cdot0{,}05)^{1/5} \approx 0{,}7155$.
+$e^{-\beta\mu}$ steht in $E[w]$ und $E[w^2]$ nur als Vorfaktor und kürzt sich
+im Quadrat des Zählers exakt gegen den Nenner:
+
+$$\frac{E[w]^2}{E[w^2]} = \frac{\big(e^{-\beta\mu}E[e^{-cz}]\big)^2}
+{e^{-2\beta\mu}E[e^{-2cz}]} = \frac{E[e^{-cz}]^2}{E[e^{-2cz}]}.$$
+
+Übrig bleibt ein reiner Ausdruck in $c$ und der Verteilung von $z$.
+
+**Kumulantenerzeugende Funktion.** Mit $K(t) := \log E[e^{tz}]$ gilt $\log
+E[e^{-cz}] = K(-c)$ und $\log E[e^{-2cz}] = K(-2c)$, also
+
+$$\log\frac{N_\text{eff}}{n} = 2K(-c) - K(-2c).$$
+
+**Entwicklung von $K$.** $K$ ist die Kumulantenerzeugende von $z$,
+
+$$K(t) = \kappa_1 t + \kappa_2\frac{t^2}{2} + \kappa_3\frac{t^3}{6}
++ \kappa_4\frac{t^4}{24} + O(t^5).$$
+
+Für standardisiertes $z$ ist $\kappa_1=0$, $\kappa_2=1$; die dritte und
+vierte Kumulante eines standardisierten Merkmals sind per Definition
+Schiefe und Exzess-Kurtosis, $\kappa_3=\gamma_1$, $\kappa_4=\gamma_2$:
+
+$$K(t) = \frac{t^2}{2} + \gamma_1\frac{t^3}{6} + \gamma_2\frac{t^4}{24}
++ O(t^5).$$
+
+Einsetzen von $t=-c$ und $t=-2c$:
+
+$$2K(-c) = c^2 - \tfrac{1}{3}\gamma_1 c^3 + \tfrac{1}{12}\gamma_2 c^4
++ O(c^5), \qquad K(-2c) = 2c^2 - \tfrac{4}{3}\gamma_1 c^3
++ \tfrac{2}{3}\gamma_2 c^4 + O(c^5).$$
+
+Die Differenz $2K(-c) - K(-2c)$ liefert die Reihe vollständig:
+
+$$\log\frac{N_\text{eff}}{n} = -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4
++ O(c^5).$$
+
+Effektiver Entwicklungsparameter ist $2c$, nicht $c$ — $K$ wird auch bei
+$t=-2c$ ausgewertet, konvergieren muss also $(2c)$, nicht $c$. Aus der
+Restabschätzung $(2c)^5/5! \le 0{,}05$ folgt die Gültigkeitsgrenze
+$C_\text{VALID} = \tfrac12(120\cdot0{,}05)^{1/5} \approx 0{,}7155$.
 
 Aufgelöst nach $c$ gibt das Effizienzkriterium die **Schranke** $c_\text{max}$:
 die kleinste positive Wurzel von
@@ -90,6 +130,25 @@ $\rho$ ist die eigentliche Kennzahl der Ausgabe. Sie macht Modelle vergleichbar,
 deren $c_\text{max}$ wegen unterschiedlicher Schiefe verschieden ausfällt: $c$
 allein sagt nichts, solange die Schranke nicht danebensteht.
 
+```mermaid
+flowchart LR
+    A["ΔE = E_DFT − E_ML"] --> B["c, γ1, γ2 berechnen"]
+    B --> C["c_max aus der Quartik lösen"]
+    C --> D{"ρ = c / c_max ≤ 1 ?"}
+    D -->|ja| G["PASS"]
+    D -->|nein| H["FAIL"]
+    G --> V{"khat, exakter N_eff —<br/>einmalig auf vollem<br/>Datensatz, siehe §3/§8"}
+    H --> V
+    V -->|Gate verletzt| U["UNCLEAR"]
+    V -->|Gate ok| Z["Urteil bestätigt"]
+```
+
+Das ist der theoretische Kriterium-Pfad aus diesem Abschnitt. Das
+Diagnose-Gate und der exakte, annahmefreie Kish-Wert (§3) laufen beide nur
+einmal, auf dem vollständigen Datensatz — anders als der sequenzielle
+Monitor (§4), der schon auf wachsenden Teilmengen mitläuft. Beide
+zusätzlichen Instanzen können strenger entscheiden als $\rho$ allein.
+
 ### Die drei Größen und ihre Rollen
 
 | Größe | Rolle | Konvergenz |
@@ -98,21 +157,21 @@ allein sagt nichts, solange die Schranke nicht danebensteht.
 | $\gamma_1,\gamma_2$ | Formkorrektur, bestimmen $c_\text{max}$ | $\gamma_1$ stabil erst ab $k\approx210$ |
 | $\hat k$ (Pareto-Tail) | **Existenzbedingung**, Gate — keine Prognose | nur auf dem vollen, geplanten Satz belastbar — nie auf einem Präfix (siehe §7a) |
 
-
-
-**Die Genauigkeit von gamma1/gamma2 reicht**, weil über $\gamma_1,\gamma_2$ nicht entschieden
-wird: sie verschieben nur $c_\text{max}$, und dort stehen sie als $\gamma_1c^3$
-bzw. $\gamma_2c^4$ gegen den führenden Term $c^2$. Die Empfindlichkeit ist
-entsprechend gering. Die Unsicherheit wird über Bootstrap quantifiziert. 
+**Die Genauigkeit von $\gamma_1,\gamma_2$ reicht**, weil über sie nicht
+entschieden wird: sie verschieben nur $c_\text{max}$, dort stehen sie als
+$\gamma_1c^3$ bzw. $\gamma_2c^4$ gegen den führenden Term $c^2$. Die
+Empfindlichkeit ist entsprechend gering, die Unsicherheit wird über Bootstrap
+quantifiziert.
 
 **Ein echter Bruch** liegt nur bei sehr kleinem $k$: dort hat die Quartik
-gelegentlich gar keine Wurzel im Gültigkeitsbereich (43 % bei $k=5$), und
-$c_\text{max}$ ist dann nicht ungenau, sondern nicht definiert. Das — nicht die
-langsame Konvergenz von $\hat\gamma_1$ — ist die Begründung für `k_floor`.
+gelegentlich gar keine Wurzel im Gültigkeitsbereich, bei $k=5$ in 43 % der
+Ziehungen, und $c_\text{max}$ ist dann nicht ungenau, sondern nicht definiert.
+Das begründet `k_floor`, nicht die langsame Konvergenz von $\hat\gamma_1$.
 
 **$c$ allein ist kein Prädiktor.** Bei festem $c$ lässt sich $N_\text{eff}/n$
 zwischen 0,0007 und 0,99998 konstruieren. Verteilungsfrei gilt nur
-$c\to0 \Rightarrow N_\text{eff}/n\to1$. Deshalb muss die Schiefenkorrigierte Kumulatenentwicklung betrachtet werden. 
+$c\to0 \Rightarrow N_\text{eff}/n\to1$. Deshalb zählt nur die schiefenkorrigierte
+Kumulantenentwicklung.
 
 **$\hat k$ ist ein Gate, kein Qualitätsmaß.** $E[w^2]<\infty \iff \hat k<0{,}5$.
 Ist das verletzt, ist $K(-2c)$ undefiniert und die Herleitung nicht ungenau,
@@ -161,13 +220,11 @@ bleibt genau eine Fehlerart: ein brauchbares Modell abbrechen.
 stärker als $\hat c$; ein Band nur um $\hat c$ ließe die größere der beiden
 Unsicherheiten weg.
 
-
-
 **Warum nicht früher geschaut wird.** Der späte Start ist der eigentliche Hebel,
 nicht die Rasterdichte: von $k\ge5$ auf $k\ge50$ fällt der Fehlalarm um Faktor 6,
-obwohl sich die Zahl der Blicke nur um 11 % verringert. Bei $k=5$ hat die Quartik
-in 43 % der Ziehungen im Gültigkeitsbereich gar keine Wurzel — die Schranke ist
-dort nicht ungenau, sondern nicht definiert.
+obwohl sich die Zahl der Blicke nur um 11 % verringert. Der Grund ist derselbe
+wie bei `k_floor` (§2): bei $k=5$ hat die Quartik oft gar keine Wurzel im
+Gültigkeitsbereich.
 
 ---
 
@@ -228,7 +285,7 @@ Gütefunktion, kein Umsetzungsfehler.
 | Grauzone | $0{,}95\dots1{,}2$ | Fehlalarm bis 11 %, Erkennung erst 76 % bei $\rho=1{,}1$ | **nein** |
 | sicher FAIL | $\gtrsim1{,}2$ | Erkennung 99 %, Abbruch beim ersten Checkpoint | **ja** |
 
-
+---
 
 ## 7. Aufruf
 
@@ -236,18 +293,33 @@ Gütefunktion, kein Umsetzungsfehler.
 python3 kish_screening.py DFT_DATEI [ML_DATEI] [Optionen]
 ```
 
-Welcher Modus greift, entscheidet allein die Zahl der Positionsargumente. Mit
-**einer** Datei muss eine npz mit `e_dft` und `e_mace`/`energies` vorliegen
-(bei `energies` der Form $(M,F)$ wird über Achse 0 gemittelt); `--key-*` wirkt
-dann nicht. Mit **zwei** Dateien werden `.npy .npz .txt .dat .csv .tsv` gelesen,
-Schlüssel über `--key-dft` / `--key-ml`.
+Welcher Modus greift, entscheidet allein die Zahl der Positionsargumente:
+
+- **Eine Datei (Single-File-Modus):** muss eine `.npz` sein und zwei
+  Energie-Keys enthalten — einen für DFT, einen für ML. Die Keys werden
+  **genauso** wie im Zwei-Dateien-Modus über `--key-dft` / `--key-ml`
+  gesetzt (siehe unten); ohne Angabe sucht das Skript automatisch die
+  ersten **zwei unterschiedlichen** Treffer aus derselben Preference-Liste
+  (`e_dft, e_mace, e_model, energies, energy, E, e`) — der erste als DFT,
+  der nächste als ML. Es wird **kein Ensemble/Committee gemittelt**: es
+  wird ein einzelnes Modell erwartet, ein Key mit echter $(M,F)$-Form
+  (mehrere Member) führt zum Abbruch (Exit 3). Trivial zweiachsige Arrays
+  wie $(n,1)$ werden dagegen einfach geglättet.
+- **Zwei Dateien (Zwei-Dateien-Modus):** gelesen werden `.npy .npz .txt .dat
+  .csv .tsv`. Bei `.npz` wird der Key über `--key-dft` / `--key-ml` gesetzt;
+  ohne Angabe sucht das Skript automatisch den ersten Treffer aus derselben
+  Preference-Liste (bzw. den einzigen vorhandenen Key, falls die Datei nur
+  einen enthält). Hier wird ein zweiachsiger Treffer (Committee, $(M,F)$)
+  weiterhin über Achse 0 gemittelt — DFT- und ML-Energien kommen hier aus
+  getrennten Dateien, eine Verwechslung mit einem Committee ist also
+  ausgeschlossen.
 
 | Option | Bedeutung | Default |
 |---|---|---|
 | `-R` | gefordertes $N_\text{eff}/n$ | 0.8 |
 | `-T` | Temperatur in Kelvin | 292 |
 | `-u` | Einheit der Eingabeenergien | eV |
-| `--key-dft` / `--key-ml` | npz-Schlüssel bei zwei Dateien (siehe oben) | automatische Suche |
+| `--key-dft` / `--key-ml` | npz-Schlüssel, in **beiden** Modi (siehe oben) | automatische Suche |
 | `-k` | Checkpoints unterhalb $k$ verwerfen | 50 |
 | `--first-frac` | Rasteranfang als Anteil von $n$ | 0.10 |
 | `-b` | Bandbreite in Standardfehlern je Seite | 1.0 |
@@ -277,18 +349,18 @@ gebaut und bleibt über wiederholte Aufrufe mit wachsendem Datensatz stabil.
 Ein Aufruf prüft dann **nur den einen gerade fälligen Checkpoint**
 (`k = Zahl der übergebenen Punkte`), nicht die Historie:
 
-* `k < k_floor` → `WEITER`, kein Check (zu wenige Punkte).
+* `k < k_floor` → `CONTINUE`, kein Check (zu wenige Punkte).
 * `k_floor <= k < n_plan` → ein Schritt der Monitor-Regel aus §4 bei diesem
-  `k`. Feuert sie → `FAIL` (Exit 1, Kampagne abbrechen). Sonst → `WEITER`
+  `k`. Feuert sie → `FAIL` (Exit 1, Kampagne abbrechen). Sonst → `CONTINUE`
   (Exit 0, weiterrechnen). Das $\hat k$-Gate, der exakte Kish-Wert und die
   Restglied-Diagnose werden hier **nicht** geprüft — sie gehören laut §6 ohnehin
   auf den vollständigen Satz, nicht auf die laufende Sequenz.
 * `k >= n_plan` → alle geplanten Punkte liegen vor; derselbe Aufruf liefert
   automatisch die volle Zertifizierung wie ohne `--live` (khat, exaktes
-  $N_\text{eff}/n$, PASS/FAIL/UNKLAR).
+  $N_\text{eff}/n$, PASS/FAIL/UNCLEAR).
 
 ```bash
-# bei jedem neuen DFT-Batch erneut aufrufen, mit den bis dahin gesammelten Punkten
+# nach jedem neuen DFT-Batch erneut aufrufen, mit den bisher gesammelten Punkten
 python3 kish_screening.py e_dft_bisher.npy e_mace_bisher.npy \
     -R 0.8 -T 292 -N 5000 --live -q || {
     echo "FAIL — MD/DFT-Kampagne abbrechen" >&2
@@ -307,7 +379,7 @@ und lassen sich mit `2>/dev/null` unterdrücken, ohne das Ergebnis zu verlieren.
 |---|---|---|
 | Bericht | (Default) | formatierte Kennzahlen und Urteil |
 | + Checkpoints | `--steps` | zusätzlich die Tabelle aller Blicke des Monitors |
-| Kurzform | `-q` | eine Zeile: `PASS`, `FAIL` oder `UNKLAR` |
+| Kurzform | `-q` | eine Zeile: `PASS`, `FAIL` oder `UNCLEAR` |
 | Maschinenlesbar | `--json` | vollständige Struktur, siehe unten |
 | ohne Monitor | `--no-monitor` | nur die Kennzahlen des vollen Satzes |
 
@@ -332,7 +404,7 @@ monitor/
   checkpoints[]                       das benutzte Raster
   schritte[]                          je Checkpoint: k, c, gamma1, gamma2,
                                       c_max, se_c, se_c_max, abstand, band, feuert
-urteil                                "PASS" | "FAIL" | "UNKLAR" | "WEITER"
+urteil                                "PASS" | "FAIL" | "UNCLEAR" | "CONTINUE"
 begruendung                           Klartext
 ```
 
@@ -341,8 +413,8 @@ Im Live-Modus (`--live`, solange `k < n_plan`) ist `gesamt` schlanker: nur
 `c, gamma1, gamma2, c_max` aus dem einen geprüften Schritt — `sigma`,
 `c_max_gauss`, `rho`, `neff_ratio*`, `khat`, `r5`, `diagnose` fehlen, weil sie
 dort nicht berechnet werden (§7a). `monitor.schritte` enthält dann genau
-einen Eintrag statt des ganzen Rasters. `urteil` ist `"WEITER"` oder
-`"FAIL"`, nie `"PASS"`/`"UNKLAR"` — die entscheidet erst der Aufruf bei
+einen Eintrag statt des ganzen Rasters. `urteil` ist `"CONTINUE"` oder
+`"FAIL"`, nie `"PASS"`/`"UNCLEAR"` — die entscheidet erst der Aufruf bei
 `k >= n_plan`.
 
 `schritte[]` enthält $\mathrm{SE}(\hat c)$ und $\mathrm{SE}(\hat c_\text{max})$
@@ -354,15 +426,15 @@ nötig.
 
 | Code | Bedeutung |
 |---|---|
-| 0 | PASS (bzw. im Live-Modus: WEITER — kein FAIL bisher, Kampagne fortsetzen) |
+| 0 | PASS (bzw. im Live-Modus: CONTINUE — kein FAIL bisher, Kampagne fortsetzen) |
 | 1 | FAIL |
 | 2 | Aufrufsfehler |
 | 3 | Datenfehler |
-| 4 | UNKLAR — $\hat k \ge 0{,}5$, $c \ge C_\text{VALID}$, oder die Reihe behauptet an $c_\text{max}$ selbst $N_\text{eff} > n$ |
+| 4 | UNCLEAR — $\hat k \ge 0{,}5$, $c \ge C_\text{VALID}$, oder die Reihe behauptet an $c_\text{max}$ selbst $N_\text{eff} > n$ |
 
-UNKLAR wird nur gemeldet, wenn der exakte Kish-Wert nicht ohnehin FAIL sagt — ein
+UNCLEAR wird nur gemeldet, wenn der exakte Kish-Wert nicht ohnehin FAIL sagt — ein
 FAIL aus der annahmefreien Zahl steht unabhängig von jeder Reihenentwicklung.
-Im Live-Modus kann UNKLAR (Exit 4) grundsätzlich nicht auftreten, solange
+Im Live-Modus kann UNCLEAR (Exit 4) grundsätzlich nicht auftreten, solange
 `k < n_plan` — das Gate dafür wird erst bei der vollen Zertifizierung ab
 `k >= n_plan` geprüft (§7a).
 

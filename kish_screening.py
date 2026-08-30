@@ -23,15 +23,11 @@ Example (batch, finished dataset):
 
     Two-file input:
 
-    python3 kish_screening.py e_dft.npy e_mace.npy -R 0.8 || {
-        echo "Reweighting does not hold — abort MD" >&2
-        exit 1
-    }
+    python3 kish_screening.py e_dft.npy e_mace.npy -R 0.8
 
     Single-file input:
     python3 kish_screening.py cache/single_mace-L0-01_testfull_n5000.npz \
         -R 0.8 -T 292 --steps
-    echo "Exit code: $?"
 
 Example (live, embedded in a running MD/DFT campaign planned for 5000
 points): call again for each newly arrived DFT batch, with the points
@@ -41,10 +37,8 @@ available, the same call automatically delivers the full certification
 (khat, exact N_eff/n, PASS/FAIL/UNCLEAR):
 
     python3 kish_screening.py e_dft_so_far.npy e_mace_so_far.npy \
-        -R 0.8 -T 292 -N 5000 --live -q || {
-        echo "FAIL — abort MD/DFT campaign" >&2
-        exit 1
-    }
+        -R 0.8 -T 292 -N 5000 --live
+    
 
 Requires only numpy.
 """
@@ -80,6 +74,8 @@ EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_DATA, EXIT_UNRELIABLE = 0, 1, 2, 3, 4
 UNITS = {"eV": 1.0, "meV": 1e-3, "Ha": 27.211386245988,
          "Ry": 13.605693122994, "kcal/mol": 0.0433641153087705,
          "kJ/mol": 0.010364269656262}
+
+KEY_PREFERENCE = ["e_dft", "e_mace", "e_model", "energies", "energy", "E", "e"]
 
 
 class Abbruch(Exception):
@@ -117,9 +113,7 @@ def lade_energien(pfad: str, key: str | None = None) -> np.ndarray:
                                   f"Available: {', '.join(d.files)}")
                 a = d[key]
             else:
-                bevorzugt = ["e_dft", "e_mace", "e_model", "energies",
-                             "energy", "E", "e"]
-                treffer = next((k for k in bevorzugt if k in d.files), None)
+                treffer = next((k for k in KEY_PREFERENCE if k in d.files), None)
                 if treffer is None:
                     if len(d.files) == 1:
                         treffer = d.files[0]
@@ -152,38 +146,72 @@ def lade_energien(pfad: str, key: str | None = None) -> np.ndarray:
     return a
 
 
-def lade_paar(pfad: str) -> tuple[np.ndarray, np.ndarray]:
+def lade_paar(pfad: str, key_dft: str | None = None,
+             key_ml: str | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Read (e_dft, e_ml) from a SINGLE npz cache.
 
-    Requires 'e_dft' and uses
-    'e_mace', otherwise the mean of 'energies' over axis 0 (member axis,
-    shape (M, F)). This lets the script run directly on the project caches
-    predictions_*.npz and mace_energies_*.npz.
+    Keys work exactly as in the two-file mode: key_dft/key_ml (--key-dft/
+    --key-ml) override the automatic search, which otherwise picks the
+    first two distinct matches from KEY_PREFERENCE (same list as
+    lade_energien) -- the first as DFT, the next as ML.
+
+    No ensemble/committee averaging: a single model is expected here, so
+    each key must hold a plain 1D array (a trivial (n,1)/(1,n) shape is
+    flattened, a genuine (M,F) committee is rejected).
     """
     p = Path(pfad)
     if not p.exists():
         raise Abbruch(EXIT_USAGE, f"file not found: {p}")
     if p.suffix.lower() != ".npz":
         raise Abbruch(EXIT_USAGE,
-                      f"{p.name}: single-file mode needs a .npz with "
-                      f"'e_dft' and 'e_mace'/'energies'. Otherwise provide "
-                      f"two files.")
+                      f"{p.name}: single-file mode needs a .npz with DFT "
+                      f"and ML energy keys (see --key-dft/--key-ml). "
+                      f"Otherwise provide two files.")
     try:
         d = np.load(p, allow_pickle=False)
     except Exception as e:                                   # noqa: BLE001
         raise Abbruch(EXIT_USAGE, f"{p.name}: unreadable ({type(e).__name__}: {e})")
-    if "e_dft" not in d.files:
+
+    def schluessel(key: str | None, ausgeschlossen: set) -> str:
+        if key is not None:
+            if key not in d.files:
+                raise Abbruch(EXIT_USAGE,
+                              f"{p.name}: key '{key}' missing. "
+                              f"Available: {', '.join(d.files)}")
+            return key
+        treffer = next((k for k in KEY_PREFERENCE
+                        if k in d.files and k not in ausgeschlossen), None)
+        if treffer is None:
+            raise Abbruch(EXIT_USAGE,
+                          f"{p.name}: no unambiguous DFT/ML energy keys "
+                          f"found. Available: {', '.join(d.files)}. "
+                          f"Specify with --key-dft / --key-ml.")
+        return treffer
+
+    k_dft = schluessel(key_dft, {key_ml} if key_ml else set())
+    k_ml = schluessel(key_ml, {k_dft})
+    if k_dft == k_ml:
         raise Abbruch(EXIT_USAGE,
-                      f"{p.name}: does not contain 'e_dft' (keys: {', '.join(d.files)})")
-    e_dft = np.asarray(d["e_dft"], dtype=float)
-    if "e_mace" in d.files:
-        e_ml = np.asarray(d["e_mace"], dtype=float)
-    elif "energies" in d.files:
-        e_ml = np.asarray(d["energies"], dtype=float).mean(axis=0)
-    else:
-        raise Abbruch(EXIT_USAGE,
-                      f"{p.name}: 'e_dft' without 'e_mace'/'energies'")
-    return e_dft.ravel(), e_ml.ravel()
+                      f"{p.name}: --key-dft and --key-ml resolve to the "
+                      f"same key '{k_dft}'")
+
+    def werte(key: str) -> np.ndarray:
+        a = np.asarray(d[key], dtype=float)
+        if a.ndim == 2:
+            if 1 in a.shape:
+                a = a.ravel()
+            else:
+                raise Abbruch(EXIT_DATA,
+                              f"{p.name}: '{key}' has shape {a.shape} -- "
+                              f"looks like an ensemble/committee. "
+                              f"Single-file mode expects one model; "
+                              f"average it yourself or pass two files.")
+        if a.ndim != 1:
+            raise Abbruch(EXIT_DATA,
+                          f"{p.name}: '{key}' expected 1D, got {a.ndim}D {a.shape}")
+        return a
+
+    return werte(k_dft), werte(k_ml)
 
 
 def pruefe_daten(e_dft: np.ndarray, e_ml: np.ndarray, k_floor: int,
@@ -606,8 +634,8 @@ def parser_bauen() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("dft", metavar="DFT_FILE",
                    help="reference energies (DFT). If the file contains "
-                        "both 'e_dft' and 'e_mace'/'energies' (project "
-                        "cache), ML_FILE can be omitted.")
+                        "both DFT and ML energy keys (project cache), "
+                        "ML_FILE can be omitted -- see --key-dft/--key-ml.")
     p.add_argument("ml", metavar="ML_FILE", nargs="?",
                    help="model energies (MACE or similar)")
     p.add_argument("-R", "--target", type=float, default=0.8, metavar="F",
@@ -616,8 +644,14 @@ def parser_bauen() -> argparse.ArgumentParser:
                    help="temperature in Kelvin (default 292)")
     p.add_argument("-u", "--units", default="eV", choices=sorted(UNITS),
                    help="unit of the input energies (default eV)")
-    p.add_argument("--key-dft", metavar="NAME", help="npz key of the DFT file")
-    p.add_argument("--key-ml", metavar="NAME", help="npz key of the ML file")
+    p.add_argument("--key-dft", metavar="NAME",
+                   help="npz key of the DFT energies. Works in both the "
+                        "single-file and the two-file mode; without it, "
+                        "the key is auto-detected from a preference list.")
+    p.add_argument("--key-ml", metavar="NAME",
+                   help="npz key of the ML energies. Works in both the "
+                        "single-file and the two-file mode; without it, "
+                        "the key is auto-detected from a preference list.")
     p.add_argument("-k", "--k-floor", type=int, default=K_FLOOR, metavar="N",
                    help=f"checkpoints below k are discarded "
                         f"(default {K_FLOOR})")
@@ -713,7 +747,7 @@ def rechnen(args) -> tuple[dict, int]:
 
     faktor = UNITS[args.units]
     if args.ml is None:
-        e_dft, e_ml = lade_paar(args.dft)
+        e_dft, e_ml = lade_paar(args.dft, args.key_dft, args.key_ml)
         e_dft, e_ml = e_dft * faktor, e_ml * faktor
     else:
         e_dft = lade_energien(args.dft, args.key_dft) * faktor

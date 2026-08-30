@@ -7,6 +7,10 @@ Uncertainty quantification for MACE machine-learned interatomic potentials,
 applied to thermodynamic reweighting of water configurations against DFT
 reference energies.
 
+Full CLI reference and the statistical formalism behind the tool live in
+[`README_kish_screening.md`](README_kish_screening.md) — start there for
+the complete picture.
+
 ---
 
 ## The question
@@ -83,8 +87,11 @@ a specific sub-question instead.
 **A note on language:** this top-level README is in English, but the
 detailed research notes are not — the notebook, `analyses/README.md`,
 [`README_kish_screening.md`](README_kish_screening.md), and most code
-comments/docstrings are written in German, the working language of the
-underlying research project.
+comments/docstrings (library code in `src/uq_mace/`, `analyses/`, `tools/`)
+are written in German, the working language of the underlying research
+project. `kish_screening.py` is the exception: its docstrings and comments
+were translated to English, since it's the piece meant to stand on its own
+outside the research context — function and variable names stayed German.
 
 ### Data, models, cache — intentionally not in this repo
 
