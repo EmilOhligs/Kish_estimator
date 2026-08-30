@@ -155,7 +155,7 @@ def lade_energien(pfad: str, key: str | None = None) -> np.ndarray:
 def lade_paar(pfad: str) -> tuple[np.ndarray, np.ndarray]:
     """Read (e_dft, e_ml) from a SINGLE npz cache.
 
-    Mirrors uq_mace.predictions.load_energies: requires 'e_dft' and uses
+    Requires 'e_dft' and uses
     'e_mace', otherwise the mean of 'energies' over axis 0 (member axis,
     shape (M, F)). This lets the script run directly on the project caches
     predictions_*.npz and mace_energies_*.npz.
@@ -209,7 +209,7 @@ def pruefe_daten(e_dft: np.ndarray, e_ml: np.ndarray, k_floor: int,
                       f"{schlecht.sum()} non-finite values in dE "
                       f"(positions {np.where(schlecht)[0][:5].tolist()}...)")
     grenze = dE.size if n_plan is None else n_plan
-    ck = checkpoints_fuer(grenze, k_floor)
+    ck = checkpoints_fuer(grenze, k_floor) #function defined in line 411
     if not ck:
         raise Abbruch(EXIT_DATA,
                       f"only {grenze} points (planned) — the grid has no "

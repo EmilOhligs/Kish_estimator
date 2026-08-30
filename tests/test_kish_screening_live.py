@@ -90,7 +90,7 @@ def test_n_plan_unter_k_floor_ist_aufrufsfehler(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Live-Zweig: WEITER unterhalb k_floor, FAIL/WEITER am aktuellen Checkpoint,
+# Live-Zweig: CONTINUE unterhalb k_floor, FAIL/CONTINUE am aktuellen Checkpoint,
 # volle Zertifizierung sobald n_plan erreicht ist
 # ---------------------------------------------------------------------------
 def test_live_unter_k_floor_liefert_weiter_ohne_check(tmp_path):
@@ -100,7 +100,7 @@ def test_live_unter_k_floor_liefert_weiter_ohne_check(tmp_path):
         [str(p_dft), str(p_ml), "-N", "5000", "--live"])
     erg, code = ks.rechnen(args)
     assert code == ks.EXIT_PASS
-    assert erg["urteil"] == "WEITER"
+    assert erg["urteil"] == "CONTINUE"
     assert erg["monitor"] is None
     assert erg["gesamt"]["n_plan"] == 5000
 
@@ -127,7 +127,7 @@ def test_live_laesst_klaren_nicht_fail_fall_weiterlaufen(tmp_path):
         [str(p_dft), str(p_ml), "-N", "5000", "--live", "-B", "30"])
     erg, code = ks.rechnen(args)
     assert code == ks.EXIT_PASS
-    assert erg["urteil"] == "WEITER"
+    assert erg["urteil"] == "CONTINUE"
     assert erg["monitor"]["gefeuert"] is False
 
 
