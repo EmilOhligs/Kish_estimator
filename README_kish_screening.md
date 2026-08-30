@@ -90,26 +90,21 @@ $$\log\frac{N_\text{eff}}{n} = 2K(-c) - K(-2c).$$
 
 **Entwicklung von $K$.** $K$ ist die Kumulantenerzeugende von $z$,
 
-$$K(t) = \kappa_1 t + \kappa_2\frac{t^2}{2} + \kappa_3\frac{t^3}{6}
-+ \kappa_4\frac{t^4}{24} + O(t^5).$$
+$$K(t) = \kappa_1 t + \kappa_2\frac{t^2}{2} + \kappa_3\frac{t^3}{6} + \kappa_4\frac{t^4}{24} + O(t^5).$$
 
 Für standardisiertes $z$ ist $\kappa_1=0$, $\kappa_2=1$; die dritte und
 vierte Kumulante eines standardisierten Merkmals sind per Definition
 Schiefe und Exzess-Kurtosis, $\kappa_3=\gamma_1$, $\kappa_4=\gamma_2$:
 
-$$K(t) = \frac{t^2}{2} + \gamma_1\frac{t^3}{6} + \gamma_2\frac{t^4}{24}
-+ O(t^5).$$
+$$K(t) = \frac{t^2}{2} + \gamma_1\frac{t^3}{6} + \gamma_2\frac{t^4}{24} + O(t^5).$$
 
 Einsetzen von $t=-c$ und $t=-2c$:
 
-$$2K(-c) = c^2 - \tfrac{1}{3}\gamma_1 c^3 + \tfrac{1}{12}\gamma_2 c^4
-+ O(c^5), \qquad K(-2c) = 2c^2 - \tfrac{4}{3}\gamma_1 c^3
-+ \tfrac{2}{3}\gamma_2 c^4 + O(c^5).$$
+$$2K(-c) = c^2 - \tfrac{1}{3}\gamma_1 c^3 + \tfrac{1}{12}\gamma_2 c^4 + O(c^5), \qquad K(-2c) = 2c^2 - \tfrac{4}{3}\gamma_1 c^3 + \tfrac{2}{3}\gamma_2 c^4 + O(c^5).$$
 
 Die Differenz $2K(-c) - K(-2c)$ liefert die Reihe vollständig:
 
-$$\log\frac{N_\text{eff}}{n} = -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4
-+ O(c^5).$$
+$$\log\frac{N_\text{eff}}{n} = -c^2 + \gamma_1c^3 - \tfrac{7}{12}\gamma_2c^4 + O(c^5).$$
 
 Effektiver Entwicklungsparameter ist $2c$, nicht $c$ — $K$ wird auch bei
 $t=-2c$ ausgewertet, konvergieren muss also $(2c)$, nicht $c$. Aus der

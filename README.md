@@ -8,7 +8,7 @@ applied to thermodynamic reweighting of water configurations against DFT
 reference energies.
 
 Full CLI reference and the statistical formalism behind the tool live in
-[`README_kish_screening.md`](README_kish_screening.md) — start there for
+[`README_kish_screening.md`](README_kish_screening.md); start there for
 the complete picture.
 
 ---
@@ -23,41 +23,42 @@ $$\langle A\rangle_\text{DFT} \approx \frac{\sum_i A_i w_i}{\sum_i w_i},
 \qquad w_i = e^{-\beta(E_\text{DFT}(R_i) - E_\text{MACE}(R_i))}.$$
 
 Whether that reweighting is worth anything depends entirely on how unequal
-the weights $w_i$ turn out to be — measured by the **Kish effective sample
+the weights $w_i$ turn out to be, measured by the **Kish effective sample
 size** $N_\text{eff}/n$. Each $w_i$ needs its own DFT single-point
 calculation, so the naive way to find out is to run the whole campaign and
 check at the end.
 
-**The core of this repo, `kish_screening.py`, is a sequential early-stopping
-monitor that avoids exactly that.** It re-evaluates the same PASS/FAIL
-criterion on a growing prefix of the campaign, at a geometrically spaced
-schedule of checkpoints (first look at 10% of the planned points, then
-$\times 1.4$ each time — see [`README_kish_screening.md`](README_kish_screening.md)
-§4 for exactly how that schedule and its lower floor are set). It is
-deliberately **one-sided**: the workflow never predicts in advance that the
-reweighting *will* work — an early PASS is never reported, since all points
-are needed regardless once it's confirmed good — it only ever calls an
-early, statistically secured **FAIL**, letting a doomed run be aborted
-instead of paying for the rest of it.
+The core of this repo, `kish_screening.py`, is a **sequential
+early-stopping monitor** that avoids exactly that. It re-evaluates the same
+PASS/FAIL criterion on a growing prefix of the campaign, at a geometrically
+spaced schedule of checkpoints (first look at 10% of the planned points,
+then $\times 1.4$ each time; see
+[`README_kish_screening.md`](README_kish_screening.md) §4 for exactly how
+that schedule and its lower floor are set). It's deliberately
+**one-sided**: the workflow never predicts in advance that the reweighting
+*will* work, since an early PASS is never reported. All points are needed
+regardless once a run is confirmed good. What it does call early, with
+statistical backing, is a **FAIL**, letting a doomed run be aborted instead
+of paying for the rest of it.
 
 On the real test data used during development, a model that ultimately
-failed the criterion was already caught at that very first checkpoint —
-about 10% of the planned points in, saving roughly 90% of the remaining DFT
-calculations. In a production setting where MD and DFT run together as one
-live campaign (the scenario `--live` is built for, see below), stopping
-there naturally saves not just DFT compute but roughly 90% of the MD
-simulation time too, since the whole campaign is aborted, not only its DFT
-side.
+failed the criterion was already caught at the very first checkpoint,
+about 10% of the planned points in. That saved roughly 90% of the
+remaining DFT calculations. In a production setting where MD and DFT run
+together as one live campaign (the scenario `--live` is built for, see
+below), the saving is bigger still: stopping there aborts the whole
+campaign, not just its DFT side, so it saves roughly 90% of the MD
+simulation time too.
 
 ## Repository structure
 
 | Path | What it is |
 |---|---|
-| [`kish_screening.py`](kish_screening.py) | Standalone, scipy-free CLI tool — the centerpiece. Decides PASS/FAIL and simulates/runs a sequential early-stopping monitor. Full docs: [`README_kish_screening.md`](README_kish_screening.md) |
+| [`kish_screening.py`](kish_screening.py) | Standalone, scipy-free CLI tool (the centerpiece). Decides PASS/FAIL and simulates/runs a sequential early-stopping monitor. Full docs: [`README_kish_screening.md`](README_kish_screening.md) |
 | [`src/uq_mace/`](src/uq_mace/) | Core library (`uq-mace` package): reweighting, sequential-screening, ensemble-evaluation and calibration code used across the `analyses/` studies |
-| [`analyses/`](analyses/) | 13 numbered, early-stage studies used to build up and stress-test the statistics piece by piece — see [`analyses/README.md`](analyses/README.md) for the full map |
+| [`analyses/`](analyses/) | 13 numbered, early-stage studies used to build up and stress-test the statistics piece by piece; see [`analyses/README.md`](analyses/README.md) for the full map |
 | [`Results/UQ_L0/`](Results/UQ_L0/) | The polished write-up: the complete method end-to-end plus the applied L0-model result, in one notebook |
-| [`tests/`](tests/) | `pytest` suite — runs in CI without any of the (gitignored) research data, see below |
+| [`tests/`](tests/) | `pytest` suite that runs in CI without any of the (gitignored) research data, see below |
 | [`tools/`](tools/) | Helper scripts, e.g. [`live_screening_sim.sh`](tools/live_screening_sim.sh) to replay `kish_screening.py`'s live-checkpoint mode against any local cache |
 
 ### Why `kish_screening.py` duplicates parts of `src/uq_mace/screening.py`
@@ -65,7 +66,7 @@ side.
 This is deliberate, not accidental drift. `src/uq_mace/screening.py` is a
 library import used by the `analyses/` scripts. `kish_screening.py` is a
 **single, dependency-light file** (numpy only) meant to be dropped into an
-HPC/production MD pipeline on its own — no package install, no scipy. The
+HPC/production MD pipeline on its own: no package install, no scipy. The
 core formulas are kept in sync by construction (both are covered by tests,
 [`tests/test_screening.py`](tests/test_screening.py) for the library and
 [`tests/test_kish_screening_live.py`](tests/test_kish_screening_live.py) for
@@ -74,10 +75,10 @@ the CLI) and were cross-checked bit-for-bit during development.
 ### From exploration to write-up
 
 `analyses/` is where the statistical framework was built up and tested
-piece by piece — skewness corrections, the sequential monitor, the
+piece by piece: skewness corrections, the sequential monitor, the
 $\hat k$ tail diagnostic, and so on, each in its own numbered folder.
-Once the approach was settled, the complete process — formalism,
-validation, and the applied result on real L0-model data — was written up
+Once the approach was settled, the complete process (formalism,
+validation, and the applied result on real L0-model data) was written up
 as one self-contained notebook in
 [`Results/UQ_L0/screening_methode.ipynb`](Results/UQ_L0/screening_methode.ipynb).
 Start there for the whole story in one place; use
@@ -85,20 +86,20 @@ Start there for the whole story in one place; use
 a specific sub-question instead.
 
 **A note on language:** this top-level README is in English, but the
-detailed research notes are not — the notebook, `analyses/README.md`,
+detailed research notes are not: the notebook, `analyses/README.md`,
 [`README_kish_screening.md`](README_kish_screening.md), and most code
 comments/docstrings (library code in `src/uq_mace/`, `analyses/`, `tools/`)
 are written in German, the working language of the underlying research
 project. `kish_screening.py` is the exception: its docstrings and comments
 were translated to English, since it's the piece meant to stand on its own
-outside the research context — function and variable names stayed German.
+outside the research context. Function and variable names stayed German.
 
 ### Data, models, cache — intentionally not in this repo
 
 `data/`, `models/`, `cache/` and `notebooks/` are gitignored: unpublished
 research data (DFT reference configurations, trained MACE checkpoints,
 derived prediction caches) and personal working notes. `kish_screening.py`
-itself needs none of this — see the Quickstart below, which works from
+itself needs none of this. See the Quickstart below, which works from
 synthetic data alone. The `analyses/` scripts and `tests/test_data_smoke.py`
 / `tests/test_cache_konsistenz.py` do need it and skip themselves
 automatically when it's absent (as in CI).
