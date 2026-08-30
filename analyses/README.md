@@ -34,6 +34,7 @@ Die Nummerierung folgt der logischen Kette, nicht der Entstehungsreihenfolge.
 | **10_training** | Neue MACE-Member trainieren | GPU-Job |
 | **11_error_correlation** | Sind die Kraftfehler räumlich korreliert? | Zerfall auf Grundlinie ab ~2.5 Å; √N nicht widerlegt (Hochpassfilter, k→0 blind) |
 | **12_screening** | Trägt das Modell — **vor** der MD? | c aus dem Testsatz, +8.7 % Ensemble-Korrektur, √N auf 128 Mol.: 0.804 vs. Paper 0.814. `validate_ensemble_shift.py` beweist die Korrektur an analytisch bekannter Wahrheit und zeigt die Abdeckungsgrenze |
+| **13_sequential_screening** | Wie wenige DFT-Punkte genügen für ein sicheres Urteil, statt den ganzen Testsatz zu rechnen? | L0-Modelle nach 10–13 Punkten sicher FAIL (98 % gespart), L2 nach 25–29 Punkten PASS; Basis von `kish_screening.py` |
 
 ---
 
@@ -42,6 +43,8 @@ Die Nummerierung folgt der logischen Kette, nicht der Entstehungsreihenfolge.
 **01–04 arbeiten auf echten Daten** (DFT + MACE aus `cache/`).
 **05–08 sind Simulation/Theorie** und laufen ohne DFT.
 **09–10 sind Infrastruktur** (Modellbewertung, Training).
+**11–13 sind weitere Auswertungen auf echten Daten** (Kraftfehler, Screening
+vor der MD, sequenzielles Screening — Basis von `kish_screening.py`).
 
 Wer den Stand nachvollziehen will, liest in dieser Reihenfolge:
 `01 → 02 → 04 → 03`, dann für die Theorie `05` und `06`.
@@ -67,15 +70,3 @@ python analyses/04_khat_uncertainty/khat_uncertainty.py
 python analyses/02_energy_difference_qq/qq_plot_energy_difference.py \
     --energies cache/mace_energies_ensemble_L2c_testbig.npz
 ```
-
----
-
-## Zugehörige Notizen
-
-Die inhaltliche Auswertung steht in `notebooks/` (nicht im Repo veröffentlicht):
-
-- `map.md` — Gesamtworkflow, sequenzielle Entscheidungslogik
-- `gauss_naeherung_gueltigkeit.md` — Kumulantenherleitung mit allen Annahmen
-- `regime_studie_methodik.md` — warum c = β·std(ΔE) die richtige Achse ist
-- `plan_konvergenz_simulation.md` — Versuchsplan zu 07
-- `ensemble_korrektur.md` — Herleitung zu 12, mit numerischer Prüfung und offener Prämisse
